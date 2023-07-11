@@ -1,11 +1,11 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.11)
 
-PROJECT(AccumulationSpace)
+PROJECT(accumulationspace)
 
 ### Required in DGtal
 FIND_PACKAGE(DGtal REQUIRED)
 INCLUDE_DIRECTORIES(${DGTAL_INCLUDE_DIRS})
 LINK_DIRECTORIES(${DGTAL_LIBRARY_DIRS})
 
-ADD_EXECUTABLE(AccumulationSpace helloworld)
-TARGET_LINK_LIBRARIES(AccumulationSpace ${DGTAL_LIBRARIES})
+ADD_EXECUTABLE(accumulationspace helloworld.cpp)
+TARGET_LINK_LIBRARIES(accumulationspace ${DGTAL_LIBRARIES})

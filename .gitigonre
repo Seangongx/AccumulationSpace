@@ -427,7 +427,9 @@ FodyWeavers.xsd
 
 # Usersettings
 .vscode/
+Debug/
 build/
 CMakeFiles/
-Debug/
+ITKFactoryRegistration/
 _deps/
+.cmake/
