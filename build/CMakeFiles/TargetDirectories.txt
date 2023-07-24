@@ -1,0 +1,7 @@
+/home/doctorant/桌面/project/AccumulationSpace/build/CMakeFiles/accumulationspace.dir
+/home/doctorant/桌面/project/AccumulationSpace/build/CMakeFiles/edit_cache.dir
+/home/doctorant/桌面/project/AccumulationSpace/build/CMakeFiles/rebuild_cache.dir
+/home/doctorant/桌面/project/AccumulationSpace/build/CMakeFiles/list_install_components.dir
+/home/doctorant/桌面/project/AccumulationSpace/build/CMakeFiles/install.dir
+/home/doctorant/桌面/project/AccumulationSpace/build/CMakeFiles/install/local.dir
+/home/doctorant/桌面/project/AccumulationSpace/build/CMakeFiles/install/strip.dir
