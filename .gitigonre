@@ -426,10 +426,8 @@ FodyWeavers.xsd
 *.sln.iml
 
 # Usersettings
-.vscode/
-Debug/
-build/
-CMakeFiles/
-ITKFactoryRegistration/
-_deps/
-.cmake/
+Debug/*
+CMakeFiles/*
+ITKFactoryRegistration/*
+_deps/*
+.cmake/*
