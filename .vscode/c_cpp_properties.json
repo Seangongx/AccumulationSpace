@@ -4,7 +4,10 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/local/include/**"
+                "/usr/local/include/**",
+                "/usr/local/include/DGtal/**",
+                "/usr/include/x86_64-linux-gnu/qt5/",
+                "/home/doctorant/Qt/5.15.2/Src/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

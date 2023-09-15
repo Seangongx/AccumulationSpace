@@ -8,12 +8,12 @@
                 "-fdiagnostics-color=always",
                 "-g",
                 "${file}",
+                "-DQT_NO_VERSION_TAGGING",
                 "-I/usr/local/include/QGLViewer",
                 "-I/usr/local/include/DGtal",
-                "-l:libQGLViewer.so",
+                "-L/usr/lib/x86_64-linux-gnu",// https://forum.qt.io/topic/72806/undefined-reference-to-qt_version_tag/6
+                "-l:libQGLViewer-qt5.so", //"-l:libQGLViewer.so",
                 "-l:libDGtal.a",
-                "-L/usr/lib/x86_64-linux-gnu",
-                "-DQT_NO_VERSION_TAGGING",
                 "-o",
                 "${fileDirname}/Debug/${fileBasenameNoExtension}"
             ],
