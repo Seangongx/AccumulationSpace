@@ -16,7 +16,6 @@
 #include <DGtal/io/writers/MeshWriter.h>
 
 #include <DGtal/images/ImageContainerBySTLVector.h>
-
 #include "CLI11.hpp"
 
 #include "NormalAccumulator.h"
