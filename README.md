@@ -1,11 +1,11 @@
 # The project about Accumulation Space and Confidence computation on triangle mesh model.
 
 ## Dependencies
-CMake >= 2.6
-PCL Library for the compAccFromSDP tool
-DGtal (eventually with QGLViewer to have 3D display tools: illustrationGraphAllSteps and testGeodesicGraphDisplay)
-DGtalTools (optional) : provide 3dVolViewer and 3dSDPViewer tools
-DGtalTools-contrib (optional) : provide graphViewer tool
+CMake >= 2.6  
+PCL Library for the compAccFromSDP tool  
+DGtal (eventually with QGLViewer to have 3D display tools: illustrationGraphAllSteps and   testGeodesicGraphDisplay)  
+DGtalTools (optional) : provide 3dVolViewer and 3dSDPViewer tools  
+DGtalTools-contrib (optional) : provide graphViewer tool  
 
 ## How to install 
 1. Please follow the short tutorial below to install DGtal (DGtalTools and DGtalTools-contrib are optional)
@@ -13,9 +13,9 @@ DGtalTools-contrib (optional) : provide graphViewer tool
 
 ## How to debug
 1. If you use VSCode, keep the .vscode folder for the project
-2. Include the requested source code (e.g. Qt5), check Debugging below
+2. Use <CMake Tools> extension to help you build the project and initiate the Debug Env. Check Debugging below
 
-## Short tutorial for installation all the dependencies of DGtal(take Ubuntu for instance)
+## Short guide for installation all the dependencies of DGtal(take Ubuntu for instance)
 
 ### ZLIB (DGtal dependency)
 Execute `sudo apt install zlib1g-dev`
@@ -36,7 +36,7 @@ Execute `sudo apt-get install libcairo2-dev`
 1. Execute `sudo apt install libeigen3-dev` to install required Eigen library ahead
 2. Follow the Guide in following link can easily install ITK with CMake through source code
 ```https://itk.org/download/```
-Please read the chapter 2.CONFIGURING AND BUILDING ITK in guide book
+Please read the chapter 2.CONFIGURING AND BUILDING ITK in guide book  
 
 ### libQGLViewer (DGtalTool dependency)
 Execute `sudo apt-get install libqglviewer-dev-qt5`
@@ -54,21 +54,22 @@ After installing all the dependencies, you can use git or download zip file from
 2. Execute `make XXX` to generate the XXX program or tool you want, or install it `sudo make install XXX`
 
 ## Debugging
+#### Warning: if you use Ubuntu OS and VSCode, please install VSCode from website rather than Snapd.
+#### Suggest: if you use VSCode, please use <CMake Tools> extenstion to help you configure debug env
+#### Stop writing the task.json in VSCode to initiate Debugging (Modern C++ POV)
 
 ### Qt(source code for debugging)
-#### Warning: if you use Ubuntu OS and VSCode, please install VSCode from website other than Snap.
 
-1. Execute `sudo apt-get install mesa-common-dev` to install OpenGL dependencies before 
-install Qt5
-2. Execute `sudo apt install libxcb-xinerama0 libxcb-cursor0` to avoid the error occurring
-before install Qt5
+1. Execute `sudo apt-get install mesa-common-dev` to install OpenGL dependencies before install Qt5
+2. Execute `sudo apt install libxcb-xinerama0 libxcb-cursor0` to avoid the error occurring before install Qt5
 `./qt-unified-linux-x64-4.6.0-online.run: error while loading shared libraries: libxcb-xinerama.so.0: cannot open shared object file: No such file or directory
 s`
 3. Execute `chmod +x qt-unified-linux-x64-x.x.x-online.run` switch the authority and execute .run file
 
-#### If you meet the error:
-`symbol lookup error: /snap/core20/current/lib/x86_64-linux-gnu/libpthread.so.0: undefined symbol: __libc_pthread_init, version GLIBC_PRIVATE`
-lead the program can run in the Ubuntu terminal but fail in VSCode Bash, change the settings of VSCode Bash
+#### If you meet the error in VSCode installed in Snapd:
+`symbol lookup error: /snap/core20/current/lib/x86_64-linux-gnu/libpthread.so.0: undefined symbol: __libc_pthread_init, version GLIBC_PRIVATE`  
+lead to the program running in the Ubuntu terminal but fail in VSCode Bash  
+change the settings of VSCode Bash  
 ```
 "terminal.integrated.env.linux": {
         //"QT_QPA_PLATFORM" : "xcb",

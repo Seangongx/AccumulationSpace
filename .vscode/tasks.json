@@ -1,4 +1,5 @@
 {
+    // Please use <CMake Tools> extenstion to help you configure debug, leave all below alone
     "tasks": [
         {
             "type": "cppbuild",
@@ -9,9 +10,11 @@
                 "-g",
                 "${file}",
                 "-DQT_NO_VERSION_TAGGING",
+                "-I${fileDirname}/src",
                 "-I/usr/local/include/QGLViewer",
                 "-I/usr/local/include/DGtal",
                 "-L/usr/lib/x86_64-linux-gnu",// https://forum.qt.io/topic/72806/undefined-reference-to-qt_version_tag/6
+                "-l:libQt5Core.so.5",
                 "-l:libQGLViewer-qt5.so", //"-l:libQGLViewer.so",
                 "-l:libDGtal.a",
                 "-o",
@@ -28,26 +31,6 @@
                 "isDefault": true
             },
             "detail": "调试器生成的任务。"
-        },
-        {
-            "type": "cppbuild",
-            "label": "C/C++: cpp build active file",
-            "command": "/usr/bin/cpp",
-            "args": [
-                "-fdiagnostics-color=always",
-                "-g",
-                "${file}",
-                "-o",
-                "${fileDirname}/${fileBasenameNoExtension}"
-            ],
-            "options": {
-                "cwd": "${fileDirname}"
-            },
-            "problemMatcher": [
-                "$gcc"
-            ],
-            "group": "build",
-            "detail": "compiler: /usr/bin/cpp"
         }
     ],
     "version": "2.0.0"
