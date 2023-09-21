@@ -8,13 +8,14 @@
                 "/usr/local/include/**",
                 "/usr/local/include/DGtal/**",
                 "/usr/include/x86_64-linux-gnu/qt5/**",
-                "/home/doctorant/Qt/5.15.2/Src/**" //remember to switch to yours path
+                "/home/adam/Qt/5.15.2/Src/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "c17",
             "cppStandard": "gnu++17",
-            "intelliSenseMode": "linux-gcc-x64"
+            "intelliSenseMode": "linux-gcc-x64",
+            "configurationProvider": "ms-vscode.cmake-tools"
         }
     ],
     "version": 4

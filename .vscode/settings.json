@@ -1,6 +1,7 @@
 {
     "files.associations": {
-        "algorithm": "cpp"
+        "algorithm": "cpp",
+        "*.ih": "cpp"
     },
     "cmake.configureOnOpen": true
 }
