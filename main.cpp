@@ -4,6 +4,8 @@
 #include "DGtal/io/viewers/Viewer3D.h"
 #include <DGtal/io/readers/MeshReader.h>
 #include <DGtal/io/writers/MeshWriter.h>
+#include <DGtal/io/writers/VolWriter.h>
+#include <DGtal/io/writers/LongvolWriter.h>
 #include "NormalAccumulator.h"
 
 #include "CLI11.hpp"
@@ -12,32 +14,47 @@ using namespace std;
 using namespace DGtal;
 using namespace DGtal::Z3i;
 
+typedef NormalAccumulator::Image3D Image3D;
+
 int main(int argc, char **argv)
 {
-  string inputFile;
-  double inputRadius{5.0};
-  string inputTypeStat{"min"};
+  string iFilename;
+  double iRadius{5.0};
+  string iRadEstType{"min"};
+  string oAccFilename{"accumulation.longvol"};
 
   // parse command line using CLI ----------------------------------------------
   CLI::App app;
   app.description("Compute mesh accumulation from a mesh and compute the radius (median value) "
                   "of all faces participating to the accumulation");
-  app.add_option("-i,--input,1", inputFile, "input mesh.")
+  app.add_option("-i,--input,1", iFilename, "input mesh.")
       ->required()
       ->check(CLI::ExistingFile);
-
-  app.add_option("--radius,-r", inputRadius, "radius of accumulation analysis.", true);
-  app.add_option("--radiusEstimator,-e", inputTypeStat, "use: {min (default), max, mean, median} to estimate the radius", true)
+  app.add_option("--radius,-r", iRadius, "Input radius used for initial accumulation analysis.", true);
+  app.add_option("--radiusEstimator,-e", iRadEstType, "use: {min (default), max, mean, median} to estimate the radius")
       ->check(CLI::IsMember({"max", "min", "mean", "median"}));
+
   app.get_formatter()->column_width(40);
   CLI11_PARSE(app, argc, argv);
   // END parse command line using CLI ----------------------------------------------
 
   // 1) Reading input mesh
-  Mesh<Z3i::RealPoint> tempMesh(true);
-  tempMesh << inputFile;
+  Mesh<Z3i::RealPoint> aMesh(true);
+  aMesh << iFilename;
 
-  NormalAccumulator na(inputRadius, inputTypeStat);
+  // 2) Init an NormalAccumulator
+  NormalAccumulator normalAcc(iRadius, iRadEstType);
+  normalAcc.initFromMesh(aMesh, false); // false: do not invert normal
+
+  // 3) Generate accumulation image
+  normalAcc.computeAccumulation();
+  Image3D imageAcc = normalAcc.getAccumulationImage();
+
+  trace.info() << "Saving accumulation image in " << oAccFilename;
+  LongvolWriter<Image3D>::exportLongvol(oAccFilename, imageAcc);
+  trace.info() << "[done]" << std::endl;
+
+  
 
   return 0;
 }

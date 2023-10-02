@@ -432,3 +432,7 @@ ITKFactoryRegistration/*
 _deps/*
 .cmake/*
 temp/*
+*.qglviewer.xml
+*.longvol
+*.vol
+temp/*
