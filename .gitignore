@@ -431,3 +431,4 @@ CMakeFiles/*
 ITKFactoryRegistration/*
 _deps/*
 .cmake/*
+temp/*
