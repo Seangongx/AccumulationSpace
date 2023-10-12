@@ -2,6 +2,9 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.11)
 
 PROJECT(AccSpaceExe)
 
+### Require C++17 standard
+set(CMAKE_CXX_STANDARD 17)  
+
 SET(AS_SOURCE_FILE 
     ${PROJECT_SOURCE_DIR}/src/GeodesicGraphComputer.cpp 
     ${PROJECT_SOURCE_DIR}/src/NormalAccumulator.cpp

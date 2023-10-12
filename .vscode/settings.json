@@ -2,7 +2,37 @@
     "files.associations": {
         "algorithm": "cpp",
         "*.ih": "cpp",
-        "vector": "cpp"
+        "vector": "cpp",
+        "filesystem": "cpp",
+        "array": "cpp",
+        "deque": "cpp",
+        "forward_list": "cpp",
+        "list": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "unordered_set": "cpp",
+        "string_view": "cpp",
+        "hash_map": "cpp",
+        "initializer_list": "cpp",
+        "valarray": "cpp",
+        "iostream": "cpp"
     },
-    "cmake.configureOnOpen": true
+    "cmake.configureOnOpen": true,
+    "cmake.debugConfig": {
+        "args": [
+            "/home/adam/Desktop/AccumulationSpace/samples/am_beech2-3.off",
+            "/home/adam/Desktop/AccumulationSpace/samples/am_beech2-3Acc.dat"
+        ]
+    }
+    // "cmake.debugConfig": {
+    //     "args": [
+    //         "/home/adam/Desktop/AccumulationSpace/samples/am_beech2-2.off",
+    //         "--autoScaleAcc",
+    //         "/home/adam/Desktop/AccumulationSpace/build/am_beech2-2.Acc.vol",
+    //         "--autoScaleConf",
+    //         "/home/adam/Desktop/AccumulationSpace/build/am_beech2-2.Conf.vol",
+    //         "-r",
+    //         "10"
+    //     ]
+    // }
 }

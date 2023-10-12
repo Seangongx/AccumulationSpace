@@ -5,14 +5,14 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/src/**",
+                "/usr/include/x86_64-linux-gnu/qt5/**",
                 "/usr/local/include/**",
                 "/usr/local/include/DGtal/**",
-                "/usr/include/x86_64-linux-gnu/qt5/**",
                 "/home/adam/Qt/5.15.2/Src/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
-            "cStandard": "c17",
+            "cStandard": "c11",
             "cppStandard": "gnu++17",
             "intelliSenseMode": "linux-gcc-x64",
             "configurationProvider": "ms-vscode.cmake-tools"
