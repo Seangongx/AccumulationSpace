@@ -82,46 +82,54 @@ using namespace DGtal;
 
  */
 
-/// @brief A structure to store the vote of a voxel
-class VoteVoxel
+#pragma region Type Definitions
+
+typedef DGtal::uint32_t Uint;
+typedef DGtal::Z3i::Point Point3D;                     // Interger 3D point ( Z3i )
+typedef DGtal::PointVector<1, DGtal::int32_t> Point1D; // Point include 1 dimension
+
+/// @brief A structure to store a voxel in max-heap
+class MyVoxel
 {
 public:
-  VoteVoxel()
+  Point3D p;
+  Uint votes;
+  bool visited;
+  vector<Uint> faces;
+
+  MyVoxel()
   {
-    p = Z3i::Point(0, 0, 0);
+    p = Point3D(0, 0, 0);
     votes = 0;
+    visited = false;
   }
-  VoteVoxel(Z3i::Point p, uint32_t votes) : p(p), votes(votes) {}
-  Z3i::Point p;
-  uint32_t votes;
-  bool operator<(const VoteVoxel &rhs) const
+  MyVoxel(Point3D _p, Uint _v, bool _f) : p(_p), votes(_v), visited(_f) {}
+  bool operator<(const MyVoxel &rhs) const
   {
     return votes < rhs.votes;
   }
 };
 
-// Point include 1 dimension
-typedef PointVector<1, DGtal::int32_t> Point1D;
 typedef SpaceND<3> Space;
 typedef HyperRectDomain<Space> Dom;
-// typedef DGtal::ImageContainerBySTLMap<Dom, bool> HashMapFlag;           // Flag
-// typedef DGtal::ImageContainerBySTLMap<Dom, DGtal::int32_t> HashMapAccv; // Accumulation Value
-typedef std::map<DGtal::uint32_t, bool> HashMapFlag;           // Flag
-typedef std::map<DGtal::uint32_t, VoteVoxel> HashMapAccv;      // Accumulation Value
-typedef std::multimap<Z3i::Point, DGtal::uint32_t> HashMapP2F; // Point to faces
+// typedef DGtal::ImageContainerBySTLMap<Dom, MyVoxel> HashMapVoxel;
+typedef std::map<Uint, MyVoxel> HashMapVoxel; // Map id to voxel
+// typedef std::multimap<Uint, Uint> HashMapV2F; // Map Point to faces
 
-std::pair<Z3i::Point, Z3i::Point>
+#pragma endregion
+
+std::pair<Point3D, Point3D>
 getBoundingBox(std::vector<std::vector<Point1D>> lData)
 {
-  std::pair<Z3i::Point, Z3i::Point> result(Z3i::Point(std::numeric_limits<int>::max(),
-                                                      std::numeric_limits<int>::max(),
-                                                      std::numeric_limits<int>::max()),
-                                           Z3i::Point(std::numeric_limits<int>::min(),
-                                                      std::numeric_limits<int>::min(),
-                                                      std::numeric_limits<int>::min()));
+  std::pair<Point3D, Point3D> result(Point3D(std::numeric_limits<int>::max(),
+                                             std::numeric_limits<int>::max(),
+                                             std::numeric_limits<int>::max()),
+                                     Point3D(std::numeric_limits<int>::min(),
+                                             std::numeric_limits<int>::min(),
+                                             std::numeric_limits<int>::min()));
   for (auto lP : lData)
   {
-    Z3i::Point p(lP[0][0], lP[1][0], lP[2][0]);
+    Point3D p(lP[0][0], lP[1][0], lP[2][0]);
     for (int i = 0; i < 3; i++)
     {
       if (result.first[i] > p[i])
@@ -139,8 +147,7 @@ getBoundingBox(std::vector<std::vector<Point1D>> lData)
 }
 
 /// @brief A function to hash a point
-DGtal::uint32_t
-myHash(Z3i::Point p)
+Uint myHash(Point3D p)
 {
   DGtal::uint64_t seed = 0;
   seed ^= std::hash<double>()(p[0]) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
@@ -150,31 +157,28 @@ myHash(Z3i::Point p)
   // return seed % 100000;
 }
 
-/// @brief Find next unvisited max key
-/// @param accMap
-/// @param flagMap
-/// @return interger(key) or -1(no unvisited key)
-DGtal::uint32_t
-getKeyWithMaxValue(const HashMapAccv &accMap, const HashMapFlag &flagMap)
+/// @brief Find first unvisited voxel cordinates with the maximum votes
+/// @param HashMapVoxel
+/// @param Point3D
+/// @return Point3D if true or Nothing if false;
+uint getKeyWithMaxValue(const HashMapVoxel &voxelMap)
 {
-  int32_t maxValue = 0; // minimum value
-  int32_t maxKey = -1;  // unvalid key
-  // int32_t maxValue = std::numeric_limits<int>::min(); interesting error
+  uint maxKey = 0;
+  uint maxValue = 0;
+  // uint maxValue = std::numeric_limits<int>::min(); interesting error
 
-  for (const auto &pair : accMap)
+  for (const auto &v : voxelMap)
   {
-    // if flag in flagmap is true(visited), then skip
-    if (flagMap.at(pair.first))
+    if (v.second.visited)
       continue;
-    if (pair.second.votes > maxValue)
+    if (v.second.votes > maxValue)
     {
-      maxValue = pair.second.votes;
-      maxKey = pair.first;
+      maxValue = v.second.votes;
+      maxKey = v.first;
     }
   }
 #ifdef DEBUG
-  cout << "Max key is " << maxKey << " at point " << accMap.at(maxKey).p
-       << " with " << maxValue << " votes " << endl;
+  cout << "Max voxel is " << maxKey << " with " << maxValue << " votes " << endl;
 #endif
   return maxKey;
 }
@@ -194,7 +198,7 @@ bool mapKeychecker(const MapType &map, const KeyType &key)
   return false;
 }
 
-bool isOnBoundary(const Z3i::Point &p, std::pair<Z3i::Point, Z3i::Point> bbox)
+bool isOnBoundary(const Point3D &p, std::pair<Point3D, Point3D> bbox)
 {
   for (int i = 0; i < 3; i++)
   {
@@ -214,7 +218,7 @@ int main(int argc, char **argv)
   CLI::App app;
   std::string inputFileName;
   std::string colorFileName; // The file containing the index to be colored in the colors
-  std::string outputFileName = inputFileName + "_colored.off";
+  std::string outputFileName;
 
   // typedef DGtal::experimental::ImageContainerByHashTree<Dom, DGtal::Z3i::Point, DGtal::uint64_t> HashTreeVertex;
 
@@ -244,125 +248,122 @@ int main(int argc, char **argv)
 #pragma region 1) Image creation
   // domain creation:
   Dom aDomain(bbox.first, bbox.second);
-  // HashMapFlag imageFlag(aDomain);
-  // HashMapAccv imageAccv(aDomain);
-  HashMapFlag imageFlag;
-  HashMapAccv imageAccv;
-  HashMapP2F mapP2T;
+  // HashMapVoxel mapVoxel(aDomain);
+  HashMapVoxel mapVoxel;
+
+  //   HashMapV2F mapV2T;
   // store data:
   for (auto l : vOrigins)
   {
-    Z3i::Point p(l[0][0], l[1][0], l[2][0]);
-    DGtal::uint32_t hashValue = myHash(p);
-    VoteVoxel vv(p, l[3][0]);
-    imageFlag[hashValue] = false;
-    imageAccv[hashValue] = vv;
+    Point3D p(l[0][0], l[1][0], l[2][0]);
+    Uint hashValue = myHash(p);
+    MyVoxel v(p, l[3][0], false);
+    for (int it = 4; it < l.size(); it++)
+    {
+      v.faces.push_back(l[it][0]);
+    }
 
 #ifdef DEBUG
     cout << endl;
     cout << "P:" << p[0] << " " << p[1] << " " << p[2] << " | ";
     cout << "votes:" << l[3][0] << " | ";
-    cout << hashValue << " -> ";
-
-#endif
-    for (int it = 4; it < l.size(); it++)
+    cout << hashValue
+         << " -> ";
+    for (auto f : v.faces)
     {
-      mapP2T.insert(std::make_pair(p, l[it][0]));
-
-#ifdef DEBUG
-      cout << l[it][0] << " ";
-#endif
+      cout << f << " ";
     }
+    cout << endl;
+#endif
+
+    // add to mapVoxel
+    mapVoxel[hashValue] = v;
   }
 #pragma endregion
 
-  // 2) traverse the accumulation image
-  // starting from the vexel with the highest votes:
-  std::priority_queue<VoteVoxel> vPQ;
-  auto keyCurrent = getKeyWithMaxValue(imageAccv, imageFlag);
+#pragma region 2) traverse the accumulation image
+
+  std::priority_queue<MyVoxel> globalPQ; // starting from the voxel with the highest votes:
+  std::queue<MyVoxel> localQ;            // starting from the voxel currently visited:
+  uint count = 0;
+
+  // add all voxels to the global priority queue
+  for (auto v : mapVoxel)
+  {
+    globalPQ.push(v.second);
+  }
+  cout << "Global queue size is " << globalPQ.size() << endl;
 
   // LOOP I: select the next voxel with the highest votes
-  while (keyCurrent > 0)
+  while (!globalPQ.empty())
   {
-    cout << "In " << keyCurrent << " loop While:" << endl;
+    auto vCurrent = globalPQ.top();
+    auto pCurrent = vCurrent.p;
+    auto idCurrent = myHash(vCurrent.p);
 
-    // // 结束条件有点问题需要确认
-    // if (!mapKeychecker(imageAccv, keyCurrent))
-    // {
-    //   keyCurrent = -1;
-    //   break;
-    // }
+    if (mapVoxel.at(idCurrent).visited)
+    {
+      globalPQ.pop();
+      continue;
+    }
+
+    // auto keyCurrent = getKeyWithMaxValue(mapVoxel);
+    // cout << "Current voxel is : " << idCurrent << " and calculate is: " << keyCurrent << endl;
 
     // LOOP II: traverse the adjacent voxels
-    vPQ.push(imageAccv.at(keyCurrent));
-    while (!vPQ.empty())
+    int gridStep = 1;
+    for (int dx = -gridStep; dx <= gridStep; ++dx)
     {
-      VoteVoxel vCurrent = vPQ.top();
-      vPQ.pop();
-      auto idCurrent = myHash(vCurrent.p);
-      cout << "The current center is : " << idCurrent << " : " << vCurrent.p << endl;
-
-      // CHECK if the voxel is visited
-      if (!mapKeychecker(imageFlag, idCurrent))
-        continue;
-      imageFlag[idCurrent] = true;
-
-      for (int dx = -1; dx <= 1; ++dx)
+      for (int dy = -gridStep; dy <= gridStep; ++dy)
       {
-        for (int dy = -1; dy <= 1; ++dy)
+        for (int dz = -gridStep; dz <= gridStep; ++dz)
         {
-          for (int dz = -1; dz <= 1; ++dz)
+          Point3D pAdjacent(vCurrent.p[0] + dx, vCurrent.p[1] + dy, vCurrent.p[2] + dz);
+          auto idAdjacent = myHash(pAdjacent);
+          if (mapKeychecker(mapVoxel, idAdjacent))
           {
-            Z3i::Point pAdjacent(vCurrent.p[0] + dx, vCurrent.p[1] + dy, vCurrent.p[2] + dz);
+            // if (isOnBoundary(pAdjacent, bbox)) // skip the boundary voxel
+            //   continue;
+            if (mapVoxel.at(idAdjacent).visited) // skip the visited voxel
+              continue;
             if (pAdjacent == vCurrent.p) // skip the center itself
               continue;
-            auto idAdjacent = myHash(pAdjacent);
-            DGtal::Color color(pAdjacent[0] % 255, pAdjacent[1] % 255, pAdjacent[2] % 255);
-            if (mapKeychecker(imageAccv, idAdjacent) && mapKeychecker(imageFlag, idAdjacent))
-            {
-              if (imageFlag.at(idAdjacent) == true)
-                continue;
-              vPQ.push(imageAccv[idAdjacent]);
-              cout << "Push " << idAdjacent << pAdjacent << " with " << imageFlag[idAdjacent] << endl;
 
-              // color the assocaited faces, but why loop last one twice ？？？
-              // Todo: check the loop
-              auto range = mapP2T.equal_range(pAdjacent);
-              for (auto it = range.first; it != range.second; ++it)
-                aMesh.setFaceColor(it->second, color);
-              cout << "-----------------------------------------------------" << endl;
-            }
+            // Paint the associated faces
+            DGtal::Color color(pCurrent[0] % 255, pCurrent[1] % 255, pCurrent[2] % 255);
+            for (auto f : mapVoxel.at(idAdjacent).faces)
+              aMesh.setFaceColor(f, color);
+            cout << count++ << ": Visisting " << idAdjacent << " : " << pAdjacent << endl;
+            cout << "-----------------------------------------------------" << endl;
           }
         }
       }
-
-      // if (x < gridWidth - 1)
-      // {
-      //   pq.push({x + 1, y, z, grid[x + 1][y][z]});
-      // }
-      // 添加其他相邻体素的逻辑
-      cout << "Next round will pop a new candidate: " << endl;
     }
 
-    auto keyCurrent = getKeyWithMaxValue(imageAccv, imageFlag);
-    cout << "Current queue empty and try to find a second maximum key " << keyCurrent << endl;
+    // mark visited
+    mapVoxel.at(myHash(vCurrent.p)).visited = true;
+    cout << globalPQ.size() << endl;
   }
 
-  // for (auto l : vOrigins)
-  // {
-  //   unsigned int k = 0;
-  //   for (auto i : l)
-  //   {
-  //     if (k > 3)
-  //     {
-  //       aMesh.setFaceColor(i[0], DGtal::Color::Red);
-  //     }
-  //     k++;
-  //   }
-  // }
+#pragma endregion
+
+  //   // for (auto l : vOrigins)
+  //   // {
+  //   //   unsigned int k = 0;
+  //   //   for (auto i : l)
+  //   //   {
+  //   //     if (k > 3)
+  //   //     {
+  //   //       aMesh.setFaceColor(i[0], DGtal::Color::Red);
+  //   //     }
+  //   //     k++;
+  //   //   }
+  //   // }
 
   ofstream fout;
+  outputFileName = inputFileName + "_colored.off";
   fout.open(outputFileName);
+  cout << "Writing output file " << outputFileName << endl;
   MeshWriter<DGtal::Z3i::RealPoint>::export2OFF(fout, aMesh);
   return 0;
 }
