@@ -39,6 +39,8 @@
 #include "DGtal/io/writers/MeshWriter.h"
 #include "DGtal/io/readers/PointListReader.h"
 #include "DGtal/helpers/StdDefs.h"
+#include "AccVoxel.h"
+#include "AccVoxelHelper.h"
 #include "CLI11.hpp"
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -84,36 +86,14 @@ using namespace DGtal;
 
 #pragma region Type Definitions
 
-typedef DGtal::uint32_t Uint;
-typedef DGtal::Z3i::Point Point3D;                     // Interger 3D point ( Z3i )
+typedef AccVoxel::Uint Uint;
+typedef AccVoxel::Point3D Point3D;                     // Interger 3D point ( Z3i )
 typedef DGtal::PointVector<1, DGtal::int32_t> Point1D; // Point include 1 dimension
-
-/// @brief A structure to store a voxel in max-heap
-class MyVoxel
-{
-public:
-  Point3D p;
-  Uint votes;
-  bool visited;
-  vector<Uint> faces;
-
-  MyVoxel()
-  {
-    p = Point3D(0, 0, 0);
-    votes = 0;
-    visited = false;
-  }
-  MyVoxel(Point3D _p, Uint _v, bool _f) : p(_p), votes(_v), visited(_f) {}
-  bool operator<(const MyVoxel &rhs) const
-  {
-    return votes < rhs.votes;
-  }
-};
 
 typedef SpaceND<3> Space;
 typedef HyperRectDomain<Space> Dom;
-// typedef DGtal::ImageContainerBySTLMap<Dom, MyVoxel> HashMapVoxel;
-typedef std::map<Uint, MyVoxel> HashMapVoxel; // Map id to voxel
+// typedef DGtal::ImageContainerBySTLMap<Dom, AccVoexel> HashMapVoxel;
+typedef std::map<Uint, AccVoxel> HashMapVoxel; // Map id to voxel
 // typedef std::multimap<Uint, Uint> HashMapV2F; // Map Point to faces
 
 #pragma endregion
@@ -155,32 +135,6 @@ Uint myHash(Point3D p)
   seed ^= std::hash<double>()(p[2]) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
   return seed;
   // return seed % 100000;
-}
-
-/// @brief Find first unvisited voxel cordinates with the maximum votes
-/// @param HashMapVoxel
-/// @param Point3D
-/// @return Point3D if true or Nothing if false;
-uint getKeyWithMaxValue(const HashMapVoxel &voxelMap)
-{
-  uint maxKey = 0;
-  uint maxValue = 0;
-  // uint maxValue = std::numeric_limits<int>::min(); interesting error
-
-  for (const auto &v : voxelMap)
-  {
-    if (v.second.visited)
-      continue;
-    if (v.second.votes > maxValue)
-    {
-      maxValue = v.second.votes;
-      maxKey = v.first;
-    }
-  }
-#ifdef DEBUG
-  cout << "Max voxel is " << maxKey << " with " << maxValue << " votes " << endl;
-#endif
-  return maxKey;
 }
 
 /// @brief Check if a key is in a map
@@ -257,7 +211,7 @@ int main(int argc, char **argv)
   {
     Point3D p(l[0][0], l[1][0], l[2][0]);
     Uint hashValue = myHash(p);
-    MyVoxel v(p, l[3][0], false);
+    AccVoxel v(p, l[3][0], false);
     for (int it = 4; it < l.size(); it++)
     {
       v.faces.push_back(l[it][0]);
@@ -283,8 +237,8 @@ int main(int argc, char **argv)
 
 #pragma region 2) traverse the accumulation image
 
-  std::priority_queue<MyVoxel> globalPQ; // starting from the voxel with the highest votes:
-  std::queue<MyVoxel> localQ;            // starting from the voxel currently visited:
+  std::priority_queue<AccVoxel> globalPQ; // starting from the voxel with the highest votes:
+  // std::queue<AccVoexel> localQ;            // starting from the voxel currently visited:
   uint count = 0;
 
   // add all voxels to the global priority queue
@@ -297,8 +251,8 @@ int main(int argc, char **argv)
   // LOOP I: select the next voxel with the highest votes
   while (!globalPQ.empty())
   {
-    auto vCurrent = globalPQ.top();
-    auto pCurrent = vCurrent.p;
+    auto vCurrent = globalPQ.top(); // for votes
+    auto pCurrent = vCurrent.p;     // for color
     auto idCurrent = myHash(vCurrent.p);
 
     if (mapVoxel.at(idCurrent).visited)
@@ -330,11 +284,19 @@ int main(int argc, char **argv)
               continue;
 
             // Paint the associated faces
-            DGtal::Color color(pCurrent[0] % 255, pCurrent[1] % 255, pCurrent[2] % 255);
+            uint r = double(pCurrent[0] - bbox.first[0]) / (bbox.second[0] - bbox.first[0]) * 255;
+            uint g = double(pCurrent[1] - bbox.first[1]) / (bbox.second[1] - bbox.first[1]) * 255;
+            uint b = double(pCurrent[2] - bbox.first[2]) / (bbox.second[2] - bbox.first[2]) * 255;
+            DGtal::Color color(r, g, b);
             for (auto f : mapVoxel.at(idAdjacent).faces)
               aMesh.setFaceColor(f, color);
-            cout << count++ << ": Visisting " << idAdjacent << " : " << pAdjacent << endl;
+
+#ifdef DEBUG
+
+            cout << count++ << ": Paint " << color << " on " << idAdjacent << " : " << pAdjacent << endl;
+            cout << globalPQ.size() < < endl;
             cout << "-----------------------------------------------------" << endl;
+#endif
           }
         }
       }
@@ -342,28 +304,15 @@ int main(int argc, char **argv)
 
     // mark visited
     mapVoxel.at(myHash(vCurrent.p)).visited = true;
-    cout << globalPQ.size() << endl;
   }
 
 #pragma endregion
 
-  //   // for (auto l : vOrigins)
-  //   // {
-  //   //   unsigned int k = 0;
-  //   //   for (auto i : l)
-  //   //   {
-  //   //     if (k > 3)
-  //   //     {
-  //   //       aMesh.setFaceColor(i[0], DGtal::Color::Red);
-  //   //     }
-  //   //     k++;
-  //   //   }
-  //   // }
-
   ofstream fout;
-  outputFileName = inputFileName + "_colored.off";
+  if (outputFileName.empty())
+    outputFileName = colorFileName.substr(0, inputFileName.length() - 4) + "_colored.off";
   fout.open(outputFileName);
-  cout << "Writing output file " << outputFileName << endl;
+  cout << "Export output in: " << outputFileName << endl;
   MeshWriter<DGtal::Z3i::RealPoint>::export2OFF(fout, aMesh);
   return 0;
 }
