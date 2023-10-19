@@ -13,7 +13,7 @@
 #include "DGtal/base/Common.h"
 #include "DGtal/helpers/StdDefs.h"
 
-// @brief A class to store a voxel in max-heap
+// @brief A structure to store a voxel in max-heap
 class AccVoxel
 {
 public:
@@ -23,6 +23,7 @@ public:
 public:
   Point3D p;
   Uint votes;
+  Uint label;
   bool visited;
   std::vector<Uint> faces;
 
@@ -30,9 +31,10 @@ public:
   {
     p = Point3D(0, 0, 0);
     votes = 0;
+    label = 0;
     visited = false;
   }
-  AccVoxel(Point3D _p, Uint _v, bool _f) : p(_p), votes(_v), visited(_f) {}
+  AccVoxel(Point3D _p, Uint _v, Uint _l, bool _f) : p(_p), votes(_v), label(_l), visited(_f) {}
   bool operator<(const AccVoxel &rhs) const
   {
     return votes < rhs.votes;

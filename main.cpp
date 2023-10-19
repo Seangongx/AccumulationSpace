@@ -31,6 +31,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 #include <iostream>
 #include <fstream>
+#include <cstddef>
 
 #include "DGtal/base/Common.h"
 // #include "DGtal/images/ImageContainerByHashTree.h"
@@ -39,9 +40,10 @@
 #include "DGtal/io/writers/MeshWriter.h"
 #include "DGtal/io/readers/PointListReader.h"
 #include "DGtal/helpers/StdDefs.h"
+#include "CLI11.hpp"
 #include "AccVoxel.h"
 #include "AccVoxelHelper.h"
-#include "CLI11.hpp"
+#include <DGtal/io/colormaps/GradientColorMap.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 using namespace std;
@@ -86,14 +88,14 @@ using namespace DGtal;
 
 #pragma region Type Definitions
 
-typedef AccVoxel::Uint Uint;
-typedef AccVoxel::Point3D Point3D;                     // Interger 3D point ( Z3i )
+typedef DGtal::uint32_t Uint;
+typedef DGtal::Z3i::Point Point3D;                     // Interger 3D point ( Z3i )
 typedef DGtal::PointVector<1, DGtal::int32_t> Point1D; // Point include 1 dimension
 
 typedef SpaceND<3> Space;
 typedef HyperRectDomain<Space> Dom;
-// typedef DGtal::ImageContainerBySTLMap<Dom, AccVoexel> HashMapVoxel;
 typedef std::map<Uint, AccVoxel> HashMapVoxel; // Map id to voxel
+// typedef DGtal::ImageContainerBySTLMap<Dom, MyVoxel> HashMapVoxel;
 // typedef std::multimap<Uint, Uint> HashMapV2F; // Map Point to faces
 
 #pragma endregion
@@ -126,17 +128,6 @@ getBoundingBox(std::vector<std::vector<Point1D>> lData)
   return result;
 }
 
-/// @brief A function to hash a point
-Uint myHash(Point3D p)
-{
-  DGtal::uint64_t seed = 0;
-  seed ^= std::hash<double>()(p[0]) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-  seed ^= std::hash<double>()(p[1]) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-  seed ^= std::hash<double>()(p[2]) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-  return seed;
-  // return seed % 100000;
-}
-
 /// @brief Check if a key is in a map
 /// @tparam MapType
 /// @tparam KeyType
@@ -162,6 +153,50 @@ bool isOnBoundary(const Point3D &p, std::pair<Point3D, Point3D> bbox)
     }
   }
   return false;
+}
+
+/// @brief When a voxel is unvisited without label, group it in current cluster
+/// @param voxel
+/// @param mapVoxel
+/// @param queue
+void labelNeighbours(const AccVoxel &voxel, HashMapVoxel &mapVoxel, std::queue<AccVoxel> &queue)
+{
+  cout << "Current center is " << voxel.label
+       << " -> " << voxel.p << endl;
+
+  int gridStep = 1;
+  for (int dx = -gridStep; dx <= gridStep; ++dx)
+  {
+    for (int dy = -gridStep; dy <= gridStep; ++dy)
+    {
+      for (int dz = -gridStep; dz <= gridStep; ++dz)
+      {
+        // locate the adjacent voxel id
+        Point3D pTemp(voxel.p[0] + dx, voxel.p[1] + dy, voxel.p[2] + dz);
+        auto idTemp = AccVoxelHelper::hash(pTemp);
+
+        if (mapKeychecker(mapVoxel, idTemp))
+        {
+          // if (isOnBoundary(pAdjacent, bbox)) // skip the boundary voxel
+          //   continue;
+          if (mapVoxel.at(idTemp).visited) // skip the visited voxel
+            continue;
+          if (pTemp == voxel.p) // skip the center itself
+            continue;
+          if (mapVoxel.at(idTemp).label == 0)
+          {
+            mapVoxel.at(idTemp).label = voxel.label;
+            queue.push(mapVoxel.at(idTemp));
+
+            cout << "Label in [" << voxel.label << "] and push " << mapVoxel.at(idTemp).p << endl;
+
+#ifdef DEBUG
+#endif
+          }
+        }
+      }
+    }
+  }
 }
 
 int main(int argc, char **argv)
@@ -199,111 +234,100 @@ int main(int argc, char **argv)
   auto bbox = getBoundingBox(vOrigins);
   std::cout << "bounding box" << bbox.first << " " << bbox.second << std::endl;
 
-#pragma region 1) Image creation
+#pragma region 1) Map creation
   // domain creation:
   Dom aDomain(bbox.first, bbox.second);
-  // HashMapVoxel mapVoxel(aDomain);
   HashMapVoxel mapVoxel;
+  // HashMapVoxel mapVoxel(aDomain);
+  // HashMapV2F mapV2T;
 
-  //   HashMapV2F mapV2T;
-  // store data:
-  for (auto l : vOrigins)
+  // store voxels in the map:
+  std::vector<AccVoxel> voxelList = AccVoxelHelper::getAccVoxelsFromFile(colorFileName);
+  for (auto &v : voxelList)
   {
-    Point3D p(l[0][0], l[1][0], l[2][0]);
-    Uint hashValue = myHash(p);
-    AccVoxel v(p, l[3][0], false);
-    for (int it = 4; it < l.size(); it++)
-    {
-      v.faces.push_back(l[it][0]);
-    }
-
-#ifdef DEBUG
-    cout << endl;
-    cout << "P:" << p[0] << " " << p[1] << " " << p[2] << " | ";
-    cout << "votes:" << l[3][0] << " | ";
-    cout << hashValue
-         << " -> ";
-    for (auto f : v.faces)
-    {
-      cout << f << " ";
-    }
-    cout << endl;
-#endif
-
-    // add to mapVoxel
+    KeyType hashValue = AccVoxelHelper::hash(v.p);
     mapVoxel[hashValue] = v;
   }
 #pragma endregion
 
 #pragma region 2) traverse the accumulation image
 
-  std::priority_queue<AccVoxel> globalPQ; // starting from the voxel with the highest votes:
-  // std::queue<AccVoexel> localQ;            // starting from the voxel currently visited:
-  uint count = 0;
+  std::priority_queue<AccVoxel> globalPQ; // maintain all but selected the voxel with the highest votes:
+  std::queue<AccVoxel> localQ;            // maintain the local visited:
+  uint clusterLabel = 0;
 
-  // add all voxels to the global priority queue
   for (auto v : mapVoxel)
-  {
     globalPQ.push(v.second);
-  }
-  cout << "Global queue size is " << globalPQ.size() << endl;
+  cout << "Loaded global queue size is " << globalPQ.size() << endl;
 
   // LOOP I: select the next voxel with the highest votes
   while (!globalPQ.empty())
   {
-    auto vCurrent = globalPQ.top(); // for votes
-    auto pCurrent = vCurrent.p;     // for color
-    auto idCurrent = myHash(vCurrent.p);
+    auto vCurrent = globalPQ.top();
+    auto pCurrent = vCurrent.p;
+    auto idCurrent = AccVoxelHelper::hash(vCurrent.p);
 
     if (mapVoxel.at(idCurrent).visited)
     {
       globalPQ.pop();
+      cout << "Pop(G): " << pCurrent << " and remain " << globalPQ.size() << endl;
       continue;
     }
 
-    // auto keyCurrent = getKeyWithMaxValue(mapVoxel);
-    // cout << "Current voxel is : " << idCurrent << " and calculate is: " << keyCurrent << endl;
-
     // LOOP II: traverse the adjacent voxels
-    int gridStep = 1;
-    for (int dx = -gridStep; dx <= gridStep; ++dx)
+
+    // Select a new cluster starting voxel update the current cluster label
+    mapVoxel.at(idCurrent).visited = true;
+    mapVoxel.at(idCurrent).label = clusterLabel++;
+    vCurrent.label = clusterLabel;
+    cout << "Current cluster center is " << pCurrent
+         << " -> " << vCurrent.label << endl;
+    cout << "Remain(G): " << globalPQ.size() << endl;
+
+    labelNeighbours(vCurrent, mapVoxel, localQ);
+    while (!localQ.empty())
     {
-      for (int dy = -gridStep; dy <= gridStep; ++dy)
+      auto vAdjacent = localQ.front();
+      auto pAdjacent = vAdjacent.p;
+      auto idAdjacent = AccVoxelHelper::hash(vAdjacent.p);
+
+      cout << "Visiting [" << clusterLabel << "] : " << pAdjacent << endl;
+      cout << "Remain(L): " << localQ.size() << endl;
+
+      if (mapVoxel.at(idAdjacent).visited)
       {
-        for (int dz = -gridStep; dz <= gridStep; ++dz)
-        {
-          Point3D pAdjacent(vCurrent.p[0] + dx, vCurrent.p[1] + dy, vCurrent.p[2] + dz);
-          auto idAdjacent = myHash(pAdjacent);
-          if (mapKeychecker(mapVoxel, idAdjacent))
-          {
-            // if (isOnBoundary(pAdjacent, bbox)) // skip the boundary voxel
-            //   continue;
-            if (mapVoxel.at(idAdjacent).visited) // skip the visited voxel
-              continue;
-            if (pAdjacent == vCurrent.p) // skip the center itself
-              continue;
-
-            // Paint the associated faces
-            uint r = double(pCurrent[0] - bbox.first[0]) / (bbox.second[0] - bbox.first[0]) * 255;
-            uint g = double(pCurrent[1] - bbox.first[1]) / (bbox.second[1] - bbox.first[1]) * 255;
-            uint b = double(pCurrent[2] - bbox.first[2]) / (bbox.second[2] - bbox.first[2]) * 255;
-            DGtal::Color color(r, g, b);
-            for (auto f : mapVoxel.at(idAdjacent).faces)
-              aMesh.setFaceColor(f, color);
-
-#ifdef DEBUG
-
-            cout << count++ << ": Paint " << color << " on " << idAdjacent << " : " << pAdjacent << endl;
-            cout << globalPQ.size() < < endl;
-            cout << "-----------------------------------------------------" << endl;
-#endif
-          }
-        }
+        localQ.pop();
+        continue;
       }
-    }
+      if (mapVoxel.at(idAdjacent).label == 0)
+      {
+        cout << "ERROR: " << pAdjacent << " is not visited but has no label" << endl;
+      }
 
-    // mark visited
-    mapVoxel.at(myHash(vCurrent.p)).visited = true;
+      // mark visited and update the current cluster label
+      // mapVoxel.at(idAdjacent).label = clusterLabel;
+      // vAdjacent.label = clusterLabel;
+      mapVoxel.at(idAdjacent).visited = true;
+      localQ.pop();
+
+      labelNeighbours(vAdjacent, mapVoxel, localQ);
+    }
+  }
+
+#pragma endregion
+
+#pragma region 3) color the mesh
+  GradientColorMap<int> cmap_grad(0, clusterLabel);
+  cmap_grad.addColor(Color(0, 0, 255));
+  cmap_grad.addColor(Color(255, 0, 0));
+  cmap_grad.addColor(Color(255, 255, 0));
+
+  for (auto v : mapVoxel)
+  {
+    for (auto f : v.second.faces)
+    {
+      aMesh.setFaceColor(f, cmap_grad(mapVoxel.at(v.first).label));
+    }
   }
 
 #pragma endregion
