@@ -79,8 +79,11 @@
     "cmake.configureOnOpen": true,
     "cmake.debugConfig": {
         "args": [
-            "/home/adam/Desktop/AccumulationSpace/samples/am_beech2-3.off",
-            "/home/adam/Desktop/AccumulationSpace/samples/am_beech2-3Acc.dat"
+            "/home/adam/Desktop/AccumulationSpace/samples/beech/am_beech2-3.off",
+            "/home/adam/Desktop/AccumulationSpace/samples/beech/am_beech2-3_r5t5.dat",
+            "/home/adam/Desktop/AccumulationSpace/samples/beech/am_beech2-3_confColor.off",
+            "--outputMode",
+            "1"
         ]
     }
     // "cmake.debugConfig": {

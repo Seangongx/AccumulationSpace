@@ -54,7 +54,8 @@ using namespace DGtal;
 /**
  @page segmentFromAcc segmentFromAcc
 
- @brief  find voxel neigbour with the accumulation value
+ @brief get accumulation or confidence clusters based on the accumulation image and
+  color the associate segement on the original mesh.
 
 
  @code
@@ -96,7 +97,6 @@ typedef SpaceND<3> Space;
 typedef HyperRectDomain<Space> Dom;
 typedef std::map<Uint, AccVoxel> HashMapVoxel; // Map id to voxel
 // typedef DGtal::ImageContainerBySTLMap<Dom, MyVoxel> HashMapVoxel;
-// typedef std::multimap<Uint, Uint> HashMapV2F; // Map Point to faces
 
 #pragma endregion
 
@@ -161,8 +161,10 @@ bool isOnBoundary(const Point3D &p, std::pair<Point3D, Point3D> bbox)
 /// @param queue
 void labelNeighbours(const AccVoxel &voxel, HashMapVoxel &mapVoxel, std::queue<AccVoxel> &queue)
 {
+#ifdef DEBUG
   cout << "Current center is " << voxel.label
        << " -> " << voxel.p << endl;
+#endif
 
   int gridStep = 1;
   for (int dx = -gridStep; dx <= gridStep; ++dx)
@@ -188,9 +190,8 @@ void labelNeighbours(const AccVoxel &voxel, HashMapVoxel &mapVoxel, std::queue<A
             mapVoxel.at(idTemp).label = voxel.label;
             queue.push(mapVoxel.at(idTemp));
 
-            cout << "Label in [" << voxel.label << "] and push " << mapVoxel.at(idTemp).p << endl;
-
 #ifdef DEBUG
+            cout << "Label in [" << voxel.label << "] and push " << mapVoxel.at(idTemp).p << endl;
 #endif
           }
         }
@@ -199,63 +200,13 @@ void labelNeighbours(const AccVoxel &voxel, HashMapVoxel &mapVoxel, std::queue<A
   }
 }
 
-int main(int argc, char **argv)
+template <typename TypePQ>
+void processLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel)
 {
+  std::queue<AccVoxel> localQ; // maintain the local visited:
 
-#pragma region 0) parse command line using ----------------------------------------------
-  // parse command line using CLI ----------------------------------------------
-  CLI::App app;
-  std::string inputFileName;
-  std::string colorFileName; // The file containing the index to be colored in the colors
-  std::string outputFileName;
-
-  // typedef DGtal::experimental::ImageContainerByHashTree<Dom, DGtal::Z3i::Point, DGtal::uint64_t> HashTreeVertex;
-
-  app.description("Converts a .obj mesh into the .off format.\n"
-                  "Typical use example:\n \t meshColorFromIndex -i file.obj -o file.off \n");
-  app.add_option("-i,--input,1", inputFileName, "an input mesh file in .obj format.")
-      ->required()
-      ->check(CLI::ExistingFile);
-  app.add_option("-c,--colorFile,2", colorFileName, "an input file containing index to colored.")
-      ->required()
-      ->check(CLI::ExistingFile);
-  app.add_option("--output,-o,3", outputFileName, "an output file ");
-
-  app.get_formatter()->column_width(40);
-  CLI11_PARSE(app, argc, argv);
-  // END parse command line using CLI ----------------------------------------------
-#pragma endregion
-
-  // read input mesh
-  DGtal::Mesh<DGtal::Z3i::RealPoint> aMesh(true);
-  aMesh << inputFileName;
-  std::vector<unsigned int> indexFace;
-  auto vOrigins = DGtal::PointListReader<Point1D>::getPolygonsFromFile(colorFileName);
-  auto bbox = getBoundingBox(vOrigins);
-  std::cout << "bounding box" << bbox.first << " " << bbox.second << std::endl;
-
-#pragma region 1) Map creation
-  // domain creation:
-  Dom aDomain(bbox.first, bbox.second);
-  HashMapVoxel mapVoxel;
-  // HashMapVoxel mapVoxel(aDomain);
-  // HashMapV2F mapV2T;
-
-  // store voxels in the map:
-  std::vector<AccVoxel> voxelList = AccVoxelHelper::getAccVoxelsFromFile(colorFileName);
-  for (auto &v : voxelList)
-  {
-    KeyType hashValue = AccVoxelHelper::hash(v.p);
-    mapVoxel[hashValue] = v;
-  }
-#pragma endregion
-
-#pragma region 2) traverse the accumulation image
-
-  std::priority_queue<AccVoxel> globalPQ; // maintain all but selected the voxel with the highest votes:
-  std::queue<AccVoxel> localQ;            // maintain the local visited:
-  uint clusterLabel = 0;
-
+  for (auto v : mapVoxel)
+    cout << v.first << " " << v.second.p << " " << v.second.confs << endl;
   for (auto v : mapVoxel)
     globalPQ.push(v.second);
   cout << "Loaded global queue size is " << globalPQ.size() << endl;
@@ -270,7 +221,9 @@ int main(int argc, char **argv)
     if (mapVoxel.at(idCurrent).visited)
     {
       globalPQ.pop();
+#ifdef DEBUG
       cout << "Pop(G): " << pCurrent << " and remain " << globalPQ.size() << endl;
+#endif
       continue;
     }
 
@@ -280,9 +233,12 @@ int main(int argc, char **argv)
     mapVoxel.at(idCurrent).visited = true;
     mapVoxel.at(idCurrent).label = clusterLabel++;
     vCurrent.label = clusterLabel;
+
+#ifdef DEBUG
     cout << "Current cluster center is " << pCurrent
          << " -> " << vCurrent.label << endl;
     cout << "Remain(G): " << globalPQ.size() << endl;
+#endif
 
     labelNeighbours(vCurrent, mapVoxel, localQ);
     while (!localQ.empty())
@@ -291,8 +247,10 @@ int main(int argc, char **argv)
       auto pAdjacent = vAdjacent.p;
       auto idAdjacent = AccVoxelHelper::hash(vAdjacent.p);
 
+#ifdef DEBUG
       cout << "Visiting [" << clusterLabel << "] : " << pAdjacent << endl;
       cout << "Remain(L): " << localQ.size() << endl;
+#endif
 
       if (mapVoxel.at(idAdjacent).visited)
       {
@@ -312,6 +270,80 @@ int main(int argc, char **argv)
 
       labelNeighbours(vAdjacent, mapVoxel, localQ);
     }
+  }
+
+  cout << "Found " << clusterLabel << " clusters" << endl
+       << "---------------------------------------------------------------------" << endl;
+}
+
+int main(int argc, char **argv)
+{
+
+#pragma region 0) parse command line using ----------------------------------------------
+  // parse command line using CLI ----------------------------------------------
+  CLI::App app;
+  std::string inputFileName;
+  std::string colorFileName;
+  std::string outputFileName;
+  char outputMode = 0;
+
+  // typedef DGtal::experimental::ImageContainerByHashTree<Dom, DGtal::Z3i::Point, DGtal::uint64_t> HashTreeVertex;
+
+  app.description("Converts a .obj mesh into the .off format.\n"
+                  "Typical use example:\n \t meshColorFromIndex -i file.obj -o file.off \n");
+  app.add_option("-i,--input,1", inputFileName, "an input mesh file in .obj format.")
+      ->required()
+      ->check(CLI::ExistingFile);
+  app.add_option("-c,--colorFile,2", colorFileName, "an input file containing accumulation, confidence and index to colored.")
+      ->required()
+      ->check(CLI::ExistingFile);
+  app.add_option("-o,--output,3", outputFileName, "an output file ");
+  app.add_option("--outputMode,4", outputMode, "0 is for accmulation compare, 1 is for confidence compare");
+
+  app.get_formatter()
+      ->column_width(40);
+  CLI11_PARSE(app, argc, argv);
+  // END parse command line using CLI ----------------------------------------------
+#pragma endregion
+
+  // read input mesh
+  DGtal::Mesh<DGtal::Z3i::RealPoint> aMesh(true);
+  aMesh << inputFileName;
+  // auto vOrigins = DGtal::PointListReader<Point1D>::getPolygonsFromFile(colorFileName);
+  // auto bbox = getBoundingBox(vOrigins);
+  // std::cout << "bounding box" << bbox.first << " " << bbox.second << std::endl;
+  // // domain creation:
+  // Dom aDomain(bbox.first, bbox.second);
+
+#pragma region 1) Map creation
+  // HashMapVoxel mapVoxel(aDomain);
+  // HashMapV2F mapV2T;
+  HashMapVoxel mapVoxel;
+
+  // store voxels in the map:
+  std::vector<AccVoxel> voxelList = AccVoxelHelper::getAccVoxelsFromFile(colorFileName);
+  for (auto &v : voxelList)
+  {
+    KeyType hashValue = AccVoxelHelper::hash(v.p);
+    mapVoxel[hashValue] = v;
+  }
+#pragma endregion
+
+#pragma region 2) traverse the accumulation image
+
+  uint clusterLabel = 0;
+  if (outputMode == 1)
+  {
+    // AccComparator cmp(compareConfsAsc);
+    // maintain all but selected the voxel with the highest confidence
+    std::priority_queue<AccVoxel, std::vector<AccVoxel>, decltype(&compareConfsAsc)> globalPQ;
+    processLabel(mapVoxel, globalPQ, clusterLabel);
+  }
+  else
+  {
+    // maintain all but selected the voxel with the highest votes
+    std::priority_queue<AccVoxel> globalPQ;
+    processLabel(mapVoxel, globalPQ, clusterLabel);
   }
 
 #pragma endregion
@@ -334,7 +366,13 @@ int main(int argc, char **argv)
 
   ofstream fout;
   if (outputFileName.empty())
-    outputFileName = colorFileName.substr(0, inputFileName.length() - 4) + "_colored.off";
+  {
+    if (outputMode == 1)
+
+      outputFileName = colorFileName.substr(0, inputFileName.length() - 4) + "_ConfColored.off";
+    else
+      outputFileName = colorFileName.substr(0, inputFileName.length() - 4) + "_AccColored.off";
+  }
   fout.open(outputFileName);
   cout << "Export output in: " << outputFileName << endl;
   MeshWriter<DGtal::Z3i::RealPoint>::export2OFF(fout, aMesh);
