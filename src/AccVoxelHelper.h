@@ -19,22 +19,21 @@
 /// @brief Defined in AccVoxelHelper.h
 typedef size_t KeyType;
 
-/// @brief A comparator class for selecting votes or confidence in AccVoxels
-class AccComparator
+struct
+    CompareAccAsc
 {
-public:
-    bool (*compareFunction)(const AccVoxel &, const AccVoxel &);
-
-    AccComparator(){};
-
-    AccComparator(bool (*compare)(const AccVoxel &, const AccVoxel &))
+    bool operator()(const AccVoxel &e1, const AccVoxel &e2) const
     {
-        compareFunction = compare;
+        return e1.votes < e2.votes;
     }
+};
 
-    bool compare(const AccVoxel &e1, const AccVoxel &e2)
+struct
+    CompareConfsAsc
+{
+    bool operator()(const AccVoxel &e1, const AccVoxel &e2) const
     {
-        return compareFunction(e1, e2);
+        return e1.confs < e2.confs;
     }
 };
 
@@ -85,15 +84,6 @@ public:
     }
 };
 
-bool compareVotesAsc(const AccVoxel &e1, const AccVoxel &e2)
-{
-    return e1.votes < e2.votes;
-}
-
-bool compareConfsAsc(const AccVoxel &e1, const AccVoxel &e2)
-{
-    return e1.confs < e2.confs;
-}
 #endif // !defined AccVoxelHelper_h
 
 #undef AccVoxelHelper_RECURSES

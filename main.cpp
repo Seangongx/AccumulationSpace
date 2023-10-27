@@ -32,7 +32,6 @@
 #include <iostream>
 #include <fstream>
 #include <cstddef>
-
 #include "DGtal/base/Common.h"
 // #include "DGtal/images/ImageContainerByHashTree.h"
 #include <DGtal/images/ImageContainerBySTLMap.h>
@@ -44,6 +43,7 @@
 #include "AccVoxel.h"
 #include "AccVoxelHelper.h"
 #include <DGtal/io/colormaps/GradientColorMap.h>
+#include "DGtal/io/colormaps/HueShadeColorMap.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 using namespace std;
@@ -65,12 +65,12 @@ using namespace DGtal;
  Usage: ./expe/segmentFromAcc [OPTIONS] 1 [2]
 
  Positionals:
-   1 TEXT:FILE REQUIRED                  an input mesh file in .obj format.
+   1 TEXT:FILE REQUIRED                  an input mesh file in .obj or .off format.
    2 TEXT                                an output file
 
  Options:
    -h,--help                             Print this help message and exit
-   -i,--input TEXT:FILE REQUIRED         an input mesh file in .obj format.
+   -i,--input TEXT:FILE REQUIRED         an input mesh file in .obj or .off format.
    -o,--output TEXT                      an output file
 
 
@@ -79,7 +79,7 @@ using namespace DGtal;
  @b Example:
 
  @code
- segmentFromAcc $DGtal/examples/samples/am_beech2-3.off am_beech2-3Acc.dat
+ segmentFromAcc $DGtal/examples/samples/am_beech2-3.off am_beech2-3Acc.dat 0 0
  @endcode
 
  @see
@@ -88,7 +88,7 @@ using namespace DGtal;
  */
 
 #pragma region Type Definitions
-
+typedef std::priority_queue<int, std::vector<int>, CompareConfsAsc> Test;
 typedef DGtal::uint32_t Uint;
 typedef DGtal::Z3i::Point Point3D;                     // Interger 3D point ( Z3i )
 typedef DGtal::PointVector<1, DGtal::int32_t> Point1D; // Point include 1 dimension
@@ -155,14 +155,14 @@ bool isOnBoundary(const Point3D &p, std::pair<Point3D, Point3D> bbox)
   return false;
 }
 
-/// @brief When a voxel is unvisited without label, group it in current cluster
+/// @brief Group a voxel in current cluster when it is unvisited without label
 /// @param voxel
 /// @param mapVoxel
 /// @param queue
 void labelNeighbours(const AccVoxel &voxel, HashMapVoxel &mapVoxel, std::queue<AccVoxel> &queue)
 {
 #ifdef DEBUG
-  cout << "Current center is " << voxel.label
+  cout << "DEBUG: Current center is " << voxel.label
        << " -> " << voxel.p << endl;
 #endif
 
@@ -187,11 +187,11 @@ void labelNeighbours(const AccVoxel &voxel, HashMapVoxel &mapVoxel, std::queue<A
             continue;
           if (mapVoxel.at(idTemp).label == 0)
           {
-            mapVoxel.at(idTemp).label = voxel.label;
+            mapVoxel.at(idTemp).label = voxel.label; // update the current cluster label in global map
             queue.push(mapVoxel.at(idTemp));
 
 #ifdef DEBUG
-            cout << "Label in [" << voxel.label << "] and push " << mapVoxel.at(idTemp).p << endl;
+            cout << "DEBUG: Label in [" << voxel.label << "] and push " << mapVoxel.at(idTemp).p << endl;
 #endif
           }
         }
@@ -200,16 +200,18 @@ void labelNeighbours(const AccVoxel &voxel, HashMapVoxel &mapVoxel, std::queue<A
   }
 }
 
+/// @brief Using a breadth-first traversal strategy to label all clusters
+/// @tparam TypePQ
+/// @param mapVoxel
+/// @param globalPQ
+/// @param clusterLabel
 template <typename TypePQ>
 void processLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel)
 {
   std::queue<AccVoxel> localQ; // maintain the local visited:
-
-  for (auto v : mapVoxel)
-    cout << v.first << " " << v.second.p << " " << v.second.confs << endl;
   for (auto v : mapVoxel)
     globalPQ.push(v.second);
-  cout << "Loaded global queue size is " << globalPQ.size() << endl;
+  cout << "SUCCESS: Loaded global queue size is " << globalPQ.size() << endl;
 
   // LOOP I: select the next voxel with the highest votes
   while (!globalPQ.empty())
@@ -222,7 +224,7 @@ void processLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel)
     {
       globalPQ.pop();
 #ifdef DEBUG
-      cout << "Pop(G): " << pCurrent << " and remain " << globalPQ.size() << endl;
+      cout << "DEBUG: Pop(G): " << pCurrent << " and remain " << globalPQ.size() << endl;
 #endif
       continue;
     }
@@ -235,9 +237,9 @@ void processLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel)
     vCurrent.label = clusterLabel;
 
 #ifdef DEBUG
-    cout << "Current cluster center is " << pCurrent
+    cout << "DEBUG: Current cluster center is " << pCurrent
          << " -> " << vCurrent.label << endl;
-    cout << "Remain(G): " << globalPQ.size() << endl;
+    cout << "DEBUG: Remain(G): " << globalPQ.size() << endl;
 #endif
 
     labelNeighbours(vCurrent, mapVoxel, localQ);
@@ -248,8 +250,8 @@ void processLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel)
       auto idAdjacent = AccVoxelHelper::hash(vAdjacent.p);
 
 #ifdef DEBUG
-      cout << "Visiting [" << clusterLabel << "] : " << pAdjacent << endl;
-      cout << "Remain(L): " << localQ.size() << endl;
+      cout << "DEBUG: Visiting [" << clusterLabel << "] : " << pAdjacent << endl;
+      cout << "DEBUG: Remain(L): " << localQ.size() << endl;
 #endif
 
       if (mapVoxel.at(idAdjacent).visited)
@@ -259,21 +261,17 @@ void processLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel)
       }
       if (mapVoxel.at(idAdjacent).label == 0)
       {
-        cout << "ERROR: " << pAdjacent << " is not visited but has no label" << endl;
+        cout << "ERROR: " << pAdjacent << " is not visited and no label" << endl;
       }
 
-      // mark visited and update the current cluster label
-      // mapVoxel.at(idAdjacent).label = clusterLabel;
-      // vAdjacent.label = clusterLabel;
+      // mark visited and label rest neighbors
       mapVoxel.at(idAdjacent).visited = true;
       localQ.pop();
-
       labelNeighbours(vAdjacent, mapVoxel, localQ);
     }
   }
 
-  cout << "Found " << clusterLabel << " clusters" << endl
-       << "---------------------------------------------------------------------" << endl;
+  cout << "SUCCESS: Found " << clusterLabel << " clusters" << endl;
 }
 
 int main(int argc, char **argv)
@@ -285,9 +283,8 @@ int main(int argc, char **argv)
   std::string inputFileName;
   std::string colorFileName;
   std::string outputFileName;
-  char outputMode = 0;
-
-  // typedef DGtal::experimental::ImageContainerByHashTree<Dom, DGtal::Z3i::Point, DGtal::uint64_t> HashTreeVertex;
+  char outputMode = 2;
+  char shaderMode = 0;
 
   app.description("Converts a .obj mesh into the .off format.\n"
                   "Typical use example:\n \t meshColorFromIndex -i file.obj -o file.off \n");
@@ -297,14 +294,20 @@ int main(int argc, char **argv)
   app.add_option("-c,--colorFile,2", colorFileName, "an input file containing accumulation, confidence and index to colored.")
       ->required()
       ->check(CLI::ExistingFile);
-  app.add_option("-o,--output,3", outputFileName, "an output file ");
-  app.add_option("--outputMode,4", outputMode, "0 is for accmulation compare, 1 is for confidence compare");
+  app.add_option("-m,--outputMode,3", outputMode, "Input 2 for confidence segemention.\n"
+                                                  "Input 1 for accmulation segementation.\n"
+                                                  "Input 0 for both by default.\n");
+  app.add_option("-s,--shaderColor,4", shaderMode, "Input 1 for Hue Shader.\n"
+                                                   "Input 0 or default for Gradient Shader.\n");
+  app.add_option("-o,--output,5", outputFileName, "an output file ");
 
   app.get_formatter()
       ->column_width(40);
   CLI11_PARSE(app, argc, argv);
   // END parse command line using CLI ----------------------------------------------
 #pragma endregion
+
+  // typedef DGtal::experimental::ImageContainerByHashTree<Dom, DGtal::Z3i::Point, DGtal::uint64_t> HashTreeVertex;
 
   // read input mesh
   DGtal::Mesh<DGtal::Z3i::RealPoint> aMesh(true);
@@ -334,14 +337,16 @@ int main(int argc, char **argv)
   uint clusterLabel = 0;
   if (outputMode == 1)
   {
-    // AccComparator cmp(compareConfsAsc);
     // maintain all but selected the voxel with the highest confidence
-    std::priority_queue<AccVoxel, std::vector<AccVoxel>, decltype(&compareConfsAsc)> globalPQ;
+    cout << "NOTICE: Segment based on confidence: " << endl;
+    std::priority_queue<AccVoxel, std::vector<AccVoxel>, CompareConfsAsc> globalPQ;
     processLabel(mapVoxel, globalPQ, clusterLabel);
   }
   else
   {
     // maintain all but selected the voxel with the highest votes
+    cout << "NOTICE: Segment based on accumulation: " << endl;
+    // std::priority_queue<AccVoxel, std::vector<AccVoxel>, CompareAccAsc> globalPQ;
     std::priority_queue<AccVoxel> globalPQ;
     processLabel(mapVoxel, globalPQ, clusterLabel);
   }
@@ -349,16 +354,31 @@ int main(int argc, char **argv)
 #pragma endregion
 
 #pragma region 3) color the mesh
-  GradientColorMap<int> cmap_grad(0, clusterLabel);
-  cmap_grad.addColor(Color(0, 0, 255));
-  cmap_grad.addColor(Color(255, 0, 0));
-  cmap_grad.addColor(Color(255, 255, 0));
-
-  for (auto v : mapVoxel)
+  if (shaderMode == 0)
   {
-    for (auto f : v.second.faces)
+    GradientColorMap<int> cmap_grad(0, clusterLabel);
+    cmap_grad.addColor(Color(0, 0, 255));
+    cmap_grad.addColor(Color(255, 0, 0));
+    cmap_grad.addColor(Color(255, 255, 0));
+
+    for (auto v : mapVoxel)
     {
-      aMesh.setFaceColor(f, cmap_grad(mapVoxel.at(v.first).label));
+      for (auto f : v.second.faces)
+      {
+        aMesh.setFaceColor(f, cmap_grad(mapVoxel.at(v.first).label));
+      }
+    }
+  }
+  else if (shaderMode == 1)
+  {
+    HueShadeColorMap<unsigned int> aColorMap(0, clusterLabel);
+    cout << "NOTICE: Colored with Hue shader map." << endl;
+    for (auto v : mapVoxel)
+    {
+      for (auto f : v.second.faces)
+      {
+        aMesh.setFaceColor(f, aColorMap(mapVoxel.at(v.first).label));
+      }
     }
   }
 
@@ -367,14 +387,20 @@ int main(int argc, char **argv)
   ofstream fout;
   if (outputFileName.empty())
   {
-    if (outputMode == 1)
-
-      outputFileName = colorFileName.substr(0, inputFileName.length() - 4) + "_ConfColored.off";
+    int inputSuffix = inputFileName.length() - 4;
+    string filename = colorFileName.substr(0, colorFileName.length() - 4);
+    if (outputMode == 2)
+      outputFileName = filename + "_ConfColored" + inputFileName.substr(inputSuffix);
+    else if (outputMode == 1)
+      outputFileName = filename + "_AccColored" + inputFileName.substr(inputSuffix);
     else
-      outputFileName = colorFileName.substr(0, inputFileName.length() - 4) + "_AccColored.off";
+    {
+      // todo: output both
+    }
   }
   fout.open(outputFileName);
-  cout << "Export output in: " << outputFileName << endl;
-  MeshWriter<DGtal::Z3i::RealPoint>::export2OFF(fout, aMesh);
+  aMesh >> outputFileName;
+  cout << "NOTICE: Export output in: " << outputFileName << endl
+       << endl;
   return 0;
 }
