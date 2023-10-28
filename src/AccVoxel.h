@@ -23,7 +23,7 @@ public:
 public:
   Point3D p;
   Uint votes;
-  Uint confs;
+  float confs;
   Uint label;
   bool visited;
   std::vector<Uint> faces;

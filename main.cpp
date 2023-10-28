@@ -274,6 +274,97 @@ void processLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel)
   cout << "SUCCESS: Found " << clusterLabel << " clusters" << endl;
 }
 
+template <typename TypePQ>
+void processLabel1(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel, float theta = 0.25f)
+{
+  std::queue<AccVoxel> localQ; // maintain the local visited:
+  for (auto &v : mapVoxel)
+  {
+    if (v.second.confs > theta && v.second.votes > 0)
+    {
+      globalPQ.push(v.second);
+    }
+    else
+    {
+      v.second.visited = true;
+    }
+  }
+  cout << "SUCCESS: Loaded global queue size is " << globalPQ.size() << endl;
+
+  // LOOP I: select the next voxel with the highest votes
+  while (!globalPQ.empty())
+  {
+    auto vCurrent = globalPQ.top();
+    auto pCurrent = vCurrent.p;
+    auto idCurrent = AccVoxelHelper::hash(vCurrent.p);
+
+    if (mapVoxel.at(idCurrent).visited)
+    {
+      globalPQ.pop();
+#ifdef DEBUG
+      cout << "DEBUG: Pop(G): " << pCurrent << " and remain " << globalPQ.size() << endl;
+#endif
+      continue;
+    }
+
+    // LOOP II: traverse the adjacent voxels
+
+    // Select a new cluster starting voxel update the current cluster label
+    mapVoxel.at(idCurrent).visited = true;
+    mapVoxel.at(idCurrent).label = clusterLabel++;
+    vCurrent.label = clusterLabel;
+
+#ifdef DEBUG
+    cout << "DEBUG: Current cluster center is " << pCurrent
+         << " -> " << vCurrent.label << endl;
+    cout << "DEBUG: Remain(G): " << globalPQ.size() << endl;
+#endif
+
+    labelNeighbours(vCurrent, mapVoxel, localQ);
+    while (!localQ.empty())
+    {
+      auto vAdjacent = localQ.front();
+      auto pAdjacent = vAdjacent.p;
+      auto idAdjacent = AccVoxelHelper::hash(vAdjacent.p);
+
+#ifdef DEBUG
+      cout << "DEBUG: Visiting [" << clusterLabel << "] : " << pAdjacent << endl;
+      cout << "DEBUG: Remain(L): " << localQ.size() << endl;
+#endif
+
+      if (mapVoxel.at(idAdjacent).visited)
+      {
+        localQ.pop();
+        continue;
+      }
+      if (mapVoxel.at(idAdjacent).label == 0)
+      {
+        cout << "ERROR: " << pAdjacent << " is not visited and no label" << endl;
+      }
+
+      // mark visited and label rest neighbors
+      mapVoxel.at(idAdjacent).visited = true;
+      localQ.pop();
+      labelNeighbours(vAdjacent, mapVoxel, localQ);
+    }
+  }
+
+  cout << "SUCCESS: Found " << clusterLabel << " clusters" << endl;
+}
+
+void computeConfidence(HashMapVoxel &mapVoxel, float theta)
+{
+  for (auto &v : mapVoxel)
+  {
+    auto &voxel = v.second;
+    voxel.confs = voxel.confs * 1.0f / voxel.votes;
+    if (voxel.confs > theta)
+    {
+      cout << v.second.p << " : " << v.second.confs << endl;
+    }
+  }
+}
+
 int main(int argc, char **argv)
 {
 
@@ -285,6 +376,7 @@ int main(int argc, char **argv)
   std::string outputFileName;
   char outputMode = 2;
   char shaderMode = 0;
+  float theta = 0.5f;
 
   app.description("Converts a .obj mesh into the .off format.\n"
                   "Typical use example:\n \t meshColorFromIndex -i file.obj -o file.off \n");
@@ -299,6 +391,7 @@ int main(int argc, char **argv)
                                                   "Input 0 for both by default.\n");
   app.add_option("-s,--shaderColor,4", shaderMode, "Input 1 for Hue Shader.\n"
                                                    "Input 0 or default for Gradient Shader.\n");
+  app.add_option("-t,--threshold,5", theta, "Threshold value [0,1] for confidence segemention.\n");
   app.add_option("-o,--output,5", outputFileName, "an output file ");
 
   app.get_formatter()
@@ -332,23 +425,28 @@ int main(int argc, char **argv)
   }
 #pragma endregion
 
-#pragma region 2) traverse the accumulation image
+#pragma region 2) traverse the 3D space voxels
 
   uint clusterLabel = 0;
-  if (outputMode == 1)
+  if (outputMode == 2)
   {
     // maintain all but selected the voxel with the highest confidence
-    cout << "NOTICE: Segment based on confidence: " << endl;
+    cout << "NOTICE: Segment based on confidence(ratio): " << endl;
     std::priority_queue<AccVoxel, std::vector<AccVoxel>, CompareConfsAsc> globalPQ;
+    computeConfidence(mapVoxel, theta);
+    processLabel1(mapVoxel, globalPQ, clusterLabel, theta);
+  }
+  else if (outputMode == 1)
+  {
+    // maintain all but selected the voxel with the highest votes
+    cout << "NOTICE: Segment based on accumulation(value): " << endl;
+    // std::priority_queue<AccVoxel, std::vector<AccVoxel>, CompareAccAsc> globalPQ;
+    std::priority_queue<AccVoxel> globalPQ;
     processLabel(mapVoxel, globalPQ, clusterLabel);
   }
   else
   {
-    // maintain all but selected the voxel with the highest votes
-    cout << "NOTICE: Segment based on accumulation: " << endl;
-    // std::priority_queue<AccVoxel, std::vector<AccVoxel>, CompareAccAsc> globalPQ;
-    std::priority_queue<AccVoxel> globalPQ;
-    processLabel(mapVoxel, globalPQ, clusterLabel);
+    // todo: output both
   }
 
 #pragma endregion
@@ -377,6 +475,8 @@ int main(int argc, char **argv)
     {
       for (auto f : v.second.faces)
       {
+        if (mapVoxel.at(v.first).label == 0)
+          continue;
         aMesh.setFaceColor(f, aColorMap(mapVoxel.at(v.first).label));
       }
     }
@@ -402,5 +502,6 @@ int main(int argc, char **argv)
   aMesh >> outputFileName;
   cout << "NOTICE: Export output in: " << outputFileName << endl
        << endl;
+  fout.close();
   return 0;
 }
