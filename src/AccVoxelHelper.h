@@ -55,7 +55,10 @@ public:
             {
                 AccVoxel::Point3D pt(l[0][0], l[1][0], l[2][0]);
                 AccVoxel accV(pt, l[3][0], l[4][0], 0, false);
-                for (unsigned int i = 5; i < l.size(); i++)
+                for (unsigned int i = 5; i < l.size() - 1; i++) // -1 to remove the repeated last index
+                {
+                    accV.faces.push_back(l[i][0]);
+                }
                 {
                     accV.faces.push_back(l[i][0]);
                 }

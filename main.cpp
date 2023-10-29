@@ -461,8 +461,20 @@ int main(int argc, char **argv)
 
     for (auto v : mapVoxel)
     {
+      cout << "CHECK: " << v.second.p << " has " << v.second.faces.size() << " faces " << endl;
       for (auto f : v.second.faces)
       {
+        if (mapVoxel.at(v.first).label == 0)
+        {
+          aMesh.setFaceColor(f, Color(0, 0, 0));
+          cout << "ERROR: " << v.second.p << " is " << v.second.visited << " and no label" << endl;
+          continue;
+        }
+        else if (mapVoxel.at(v.first).label == clusterLabel)
+        {
+          aMesh.setFaceColor(f, Color(255, 255, 255));
+          continue;
+        }
         aMesh.setFaceColor(f, cmap_grad(mapVoxel.at(v.first).label));
       }
     }
@@ -476,7 +488,15 @@ int main(int argc, char **argv)
       for (auto f : v.second.faces)
       {
         if (mapVoxel.at(v.first).label == 0)
+        {
+          aMesh.setFaceColor(f, Color(0, 0, 0));
           continue;
+        }
+        else if (mapVoxel.at(v.first).label == clusterLabel)
+        {
+          aMesh.setFaceColor(f, Color(255, 255, 255));
+          continue;
+        }
         aMesh.setFaceColor(f, aColorMap(mapVoxel.at(v.first).label));
       }
     }
