@@ -233,7 +233,7 @@ void processLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel)
 
     // Select a new cluster starting voxel update the current cluster label
     mapVoxel.at(idCurrent).visited = true;
-    mapVoxel.at(idCurrent).label = clusterLabel++;
+    mapVoxel.at(idCurrent).label = ++clusterLabel;
     vCurrent.label = clusterLabel;
 
 #ifdef DEBUG
@@ -311,7 +311,7 @@ void processLabel1(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel,
 
     // Select a new cluster starting voxel update the current cluster label
     mapVoxel.at(idCurrent).visited = true;
-    mapVoxel.at(idCurrent).label = clusterLabel++;
+    mapVoxel.at(idCurrent).label = ++clusterLabel;
     vCurrent.label = clusterLabel;
 
 #ifdef DEBUG
@@ -361,6 +361,69 @@ void computeConfidence(HashMapVoxel &mapVoxel, float theta)
     if (voxel.confs > theta)
     {
       cout << v.second.p << " : " << v.second.confs << endl;
+    }
+  }
+}
+
+void loadGradientShader(ofstream &fs, string &filename, HashMapVoxel &mapVoxel, DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh, uint clusterLabel)
+{
+  GradientColorMap<int> cmap_grad(0, clusterLabel); // watch out the interval boundary
+  cmap_grad.addColor(Color(0, 0, 255));
+  cmap_grad.addColor(Color(255, 0, 0));
+  cmap_grad.addColor(Color(255, 255, 0));
+
+  for (auto v : mapVoxel)
+  {
+    Color cTemp = cmap_grad(mapVoxel.at(v.first).label);
+
+    // SDP color
+    fs << v.second.p[0] << " "
+       << v.second.p[1] << " "
+       << v.second.p[2] << " "
+       << int(cTemp.red()) << " "
+       << int(cTemp.green()) << " "
+       << int(cTemp.blue()) << " "
+       << endl;
+    // Faces color
+    for (auto f : v.second.faces)
+    {
+      if (mapVoxel.at(v.first).label == 0)
+      {
+        aMesh.setFaceColor(f, Color(0, 0, 0));
+        cout << "ERROR: " << v.second.p << " is " << v.second.visited << " and no label" << endl;
+        continue;
+      }
+      aMesh.setFaceColor(f, cmap_grad(mapVoxel.at(v.first).label));
+    }
+  }
+}
+
+void loadHueShader(ofstream &fs, string &filename, HashMapVoxel &mapVoxel, DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh, uint clusterLabel)
+{
+  HueShadeColorMap<unsigned int> aColorMap(0, clusterLabel);
+
+  for (auto v : mapVoxel)
+  {
+    Color cTemp = aColorMap(mapVoxel.at(v.first).label);
+    // SDP color
+    fs << v.second.p[0] << " "
+       << v.second.p[1] << " "
+       << v.second.p[2] << " "
+       << int(cTemp.red()) << " "
+       << int(cTemp.green()) << " "
+       << int(cTemp.blue()) << " "
+       << endl;
+
+    // Faces color
+    for (auto f : v.second.faces)
+    {
+      if (mapVoxel.at(v.first).label == 0)
+      {
+        aMesh.setFaceColor(f, Color(0, 0, 0));
+        cout << "ERROR: " << v.second.p << " is " << v.second.visited << " and no label" << endl;
+        continue;
+      }
+      aMesh.setFaceColor(f, cTemp);
     }
   }
 }
@@ -451,60 +514,25 @@ int main(int argc, char **argv)
 
 #pragma endregion
 
-#pragma region 3) color the mesh
+#pragma region 3) color the Sequence Discrete Point(SDP) and faces
+
+  ofstream fout;
+  string outputSDPName = colorFileName.substr(0, colorFileName.length() - 4) + "_SDP.dat";
+  fout.open(outputSDPName);
   if (shaderMode == 0)
   {
-    GradientColorMap<int> cmap_grad(0, clusterLabel);
-    cmap_grad.addColor(Color(0, 0, 255));
-    cmap_grad.addColor(Color(255, 0, 0));
-    cmap_grad.addColor(Color(255, 255, 0));
-
-    for (auto v : mapVoxel)
-    {
-      cout << "CHECK: " << v.second.p << " has " << v.second.faces.size() << " faces " << endl;
-      for (auto f : v.second.faces)
-      {
-        if (mapVoxel.at(v.first).label == 0)
-        {
-          aMesh.setFaceColor(f, Color(0, 0, 0));
-          cout << "ERROR: " << v.second.p << " is " << v.second.visited << " and no label" << endl;
-          continue;
-        }
-        else if (mapVoxel.at(v.first).label == clusterLabel)
-        {
-          aMesh.setFaceColor(f, Color(255, 255, 255));
-          continue;
-        }
-        aMesh.setFaceColor(f, cmap_grad(mapVoxel.at(v.first).label));
-      }
-    }
+    cout << "NOTICE: Colored with Gradient shader map." << endl;
+    loadGradientShader(fout, outputSDPName, mapVoxel, aMesh, clusterLabel);
   }
   else if (shaderMode == 1)
   {
-    HueShadeColorMap<unsigned int> aColorMap(0, clusterLabel);
     cout << "NOTICE: Colored with Hue shader map." << endl;
-    for (auto v : mapVoxel)
-    {
-      for (auto f : v.second.faces)
-      {
-        if (mapVoxel.at(v.first).label == 0)
-        {
-          aMesh.setFaceColor(f, Color(0, 0, 0));
-          continue;
-        }
-        else if (mapVoxel.at(v.first).label == clusterLabel)
-        {
-          aMesh.setFaceColor(f, Color(255, 255, 255));
-          continue;
-        }
-        aMesh.setFaceColor(f, aColorMap(mapVoxel.at(v.first).label));
-      }
-    }
+    loadHueShader(fout, outputSDPName, mapVoxel, aMesh, clusterLabel);
   }
+  fout.close();
+  cout << "NOTICE: Export output in: " << outputSDPName << endl
+       << endl;
 
-#pragma endregion
-
-  ofstream fout;
   if (outputFileName.empty())
   {
     int inputSuffix = inputFileName.length() - 4;
@@ -523,5 +551,8 @@ int main(int argc, char **argv)
   cout << "NOTICE: Export output in: " << outputFileName << endl
        << endl;
   fout.close();
+
+#pragma endregion
+
   return 0;
 }

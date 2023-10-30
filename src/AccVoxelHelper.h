@@ -59,9 +59,6 @@ public:
                 {
                     accV.faces.push_back(l[i][0]);
                 }
-                {
-                    accV.faces.push_back(l[i][0]);
-                }
                 resVectAcc.push_back(accV);
             }
 
