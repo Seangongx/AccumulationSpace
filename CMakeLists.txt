@@ -25,7 +25,7 @@ SET (QGLVIEWER_LIBRARIES  "/usr/local/lib/libQGLViewer-qt5.so")
 #find_package(QGLViewer REQUIRED)
 
 ### Generate Project
-add_subdirectory(bin)
+add_subdirectory(tools)
 ADD_EXECUTABLE(AccSpaceExe ${AS_SOURCE_FILE} main.cpp)
 ### include directories
 target_include_directories(AccSpaceExe

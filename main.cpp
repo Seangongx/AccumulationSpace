@@ -44,6 +44,7 @@
 #include "AccVoxelHelper.h"
 #include <DGtal/io/colormaps/GradientColorMap.h>
 #include "DGtal/io/colormaps/HueShadeColorMap.h"
+#include <type_traits>
 
 ///////////////////////////////////////////////////////////////////////////////
 using namespace std;
@@ -206,7 +207,7 @@ void labelNeighbours(const AccVoxel &voxel, HashMapVoxel &mapVoxel, std::queue<A
 /// @param globalPQ
 /// @param clusterLabel
 template <typename TypePQ>
-void processLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel)
+void processAccLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel)
 {
   std::queue<AccVoxel> localQ; // maintain the local visited:
   for (auto v : mapVoxel)
@@ -274,10 +275,20 @@ void processLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel)
   cout << "SUCCESS: Found " << clusterLabel << " clusters" << endl;
 }
 
+/// @brief Overload the processLabel function with a threshold
+/// @tparam TypePQ
+/// @param mapVoxel
+/// @param globalPQ
+/// @param clusterLabel
+/// @param theta
 template <typename TypePQ>
-void processLabel1(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel, float theta = 0.25f)
+void processConfLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel, float theta = 0.0f)
 {
+  Uint countFilterTimes = 0;
+  Uint sizeLocalQueue = 0;
   std::queue<AccVoxel> localQ; // maintain the local visited:
+
+  cout << "DEBUG: globalQ type is " << typeid(decltype(globalPQ)).name() << endl;
   for (auto &v : mapVoxel)
   {
     if (v.second.confs > theta && v.second.votes > 0)
@@ -286,10 +297,13 @@ void processLabel1(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel,
     }
     else
     {
+      // label 0 was been igonred
+      countFilterTimes++;
       v.second.visited = true;
     }
   }
   cout << "SUCCESS: Loaded global queue size is " << globalPQ.size() << endl;
+  sizeLocalQueue = globalPQ.size();
 
   // LOOP I: select the next voxel with the highest votes
   while (!globalPQ.empty())
@@ -349,7 +363,8 @@ void processLabel1(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel,
     }
   }
 
-  cout << "SUCCESS: Found " << clusterLabel << " clusters" << endl;
+  cout << "SUCCESS: Found " << clusterLabel << " clusters and " << sizeLocalQueue << " voxels" << endl;
+  cout << "FILTER: Filtered " << countFilterTimes << " voxels" << endl;
 }
 
 void computeConfidence(HashMapVoxel &mapVoxel, float theta)
@@ -358,22 +373,23 @@ void computeConfidence(HashMapVoxel &mapVoxel, float theta)
   {
     auto &voxel = v.second;
     voxel.confs = voxel.confs * 1.0f / voxel.votes;
-    if (voxel.confs > theta)
-    {
-      cout << v.second.p << " : " << v.second.confs << endl;
-    }
   }
 }
 
 void loadGradientShader(ofstream &fs, string &filename, HashMapVoxel &mapVoxel, DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh, uint clusterLabel)
 {
-  GradientColorMap<int> cmap_grad(0, clusterLabel); // watch out the interval boundary
+  GradientColorMap<Uint> cmap_grad(0, clusterLabel); // watch out the interval boundary
   cmap_grad.addColor(Color(0, 0, 255));
   cmap_grad.addColor(Color(255, 0, 0));
   cmap_grad.addColor(Color(255, 255, 0));
 
   for (auto v : mapVoxel)
   {
+    if (mapVoxel.at(v.first).label == 0)
+    {
+      cout << "ERROR: " << v.second.p << " is " << v.second.visited << " and no label" << endl;
+      continue;
+    }
     Color cTemp = cmap_grad(mapVoxel.at(v.first).label);
 
     // SDP color
@@ -387,12 +403,6 @@ void loadGradientShader(ofstream &fs, string &filename, HashMapVoxel &mapVoxel, 
     // Faces color
     for (auto f : v.second.faces)
     {
-      if (mapVoxel.at(v.first).label == 0)
-      {
-        aMesh.setFaceColor(f, Color(0, 0, 0));
-        cout << "ERROR: " << v.second.p << " is " << v.second.visited << " and no label" << endl;
-        continue;
-      }
       aMesh.setFaceColor(f, cmap_grad(mapVoxel.at(v.first).label));
     }
   }
@@ -400,10 +410,17 @@ void loadGradientShader(ofstream &fs, string &filename, HashMapVoxel &mapVoxel, 
 
 void loadHueShader(ofstream &fs, string &filename, HashMapVoxel &mapVoxel, DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh, uint clusterLabel)
 {
-  HueShadeColorMap<unsigned int> aColorMap(0, clusterLabel);
+  HueShadeColorMap<Uint> aColorMap(0, clusterLabel);
 
   for (auto v : mapVoxel)
   {
+    if (mapVoxel.at(v.first).label == 0)
+    {
+#ifdef DEBUG
+      cout << "DEBUG: " << v.second.p << " is " << v.second.visited << " and igonred with no label" << endl;
+#endif
+      continue;
+    }
     Color cTemp = aColorMap(mapVoxel.at(v.first).label);
     // SDP color
     fs << v.second.p[0] << " "
@@ -413,16 +430,9 @@ void loadHueShader(ofstream &fs, string &filename, HashMapVoxel &mapVoxel, DGtal
        << int(cTemp.green()) << " "
        << int(cTemp.blue()) << " "
        << endl;
-
     // Faces color
     for (auto f : v.second.faces)
     {
-      if (mapVoxel.at(v.first).label == 0)
-      {
-        aMesh.setFaceColor(f, Color(0, 0, 0));
-        cout << "ERROR: " << v.second.p << " is " << v.second.visited << " and no label" << endl;
-        continue;
-      }
       aMesh.setFaceColor(f, cTemp);
     }
   }
@@ -497,7 +507,7 @@ int main(int argc, char **argv)
     cout << "NOTICE: Segment based on confidence(ratio): " << endl;
     std::priority_queue<AccVoxel, std::vector<AccVoxel>, CompareConfsAsc> globalPQ;
     computeConfidence(mapVoxel, theta);
-    processLabel1(mapVoxel, globalPQ, clusterLabel, theta);
+    processConfLabel(mapVoxel, globalPQ, clusterLabel, theta);
   }
   else if (outputMode == 1)
   {
@@ -505,10 +515,11 @@ int main(int argc, char **argv)
     cout << "NOTICE: Segment based on accumulation(value): " << endl;
     // std::priority_queue<AccVoxel, std::vector<AccVoxel>, CompareAccAsc> globalPQ;
     std::priority_queue<AccVoxel> globalPQ;
-    processLabel(mapVoxel, globalPQ, clusterLabel);
+    processAccLabel(mapVoxel, globalPQ, clusterLabel);
   }
   else
   {
+    cout << "TODO: uncomplished functionality and stop the program." << endl;
     // todo: output both
   }
 
@@ -530,12 +541,11 @@ int main(int argc, char **argv)
     loadHueShader(fout, outputSDPName, mapVoxel, aMesh, clusterLabel);
   }
   fout.close();
-  cout << "NOTICE: Export output in: " << outputSDPName << endl
-       << endl;
+  cout << "NOTICE: Export output in: " << outputSDPName << endl;
 
   if (outputFileName.empty())
   {
-    int inputSuffix = inputFileName.length() - 4;
+    int inputSuffix = inputFileName.length() - 4; // .obj or .off
     string filename = colorFileName.substr(0, colorFileName.length() - 4);
     if (outputMode == 2)
       outputFileName = filename + "_ConfColored" + inputFileName.substr(inputSuffix);
@@ -543,7 +553,9 @@ int main(int argc, char **argv)
       outputFileName = filename + "_AccColored" + inputFileName.substr(inputSuffix);
     else
     {
+      cout << "TODO: uncomplished functionality and stop the program." << endl;
       // todo: output both
+      return 0;
     }
   }
   fout.open(outputFileName);
