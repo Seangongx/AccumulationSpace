@@ -1,11 +1,10 @@
-SET (AS_BIN 
+SET (AS_TOOLS
   compAccFromMesh
   3dSDPViewer
   meshViewer
 )
 
-
-FOREACH(FILE ${AS_BIN})
+FOREACH(FILE ${AS_TOOLS})
   add_executable(${FILE} ${FILE}.cpp ${AS_SOURCE_FILE})
   target_link_libraries(${FILE} ${DGTAL_LIBRARIES})
   target_include_directories(${FILE}

@@ -40,7 +40,8 @@ struct
 class AccVoxelHelper
 {
 public:
-    /// @brief Read extracted file includes accumulation and confidence
+    /// @brief Read extracted file includes accumulation and confidence \n
+    /// @brief Warning: using old version of DGtal may read 1 more repeated last face index
     /// @param filename
     /// @return
     static std::vector<AccVoxel> getAccVoxelsFromFile(std::string filename)
@@ -55,7 +56,9 @@ public:
             {
                 AccVoxel::Point3D pt(l[0][0], l[1][0], l[2][0]);
                 AccVoxel accV(pt, l[3][0], l[4][0], 0, false);
-                for (unsigned int i = 5; i < l.size() - 1; i++) // -1 to remove the repeated last index
+
+                // l.size()-1 to remove the repeated last index in old version of DGtal
+                for (unsigned int i = 5; i < l.size(); i++)
                 {
                     accV.faces.push_back(l[i][0]);
                 }

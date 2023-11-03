@@ -129,7 +129,7 @@ getBoundingBox(std::vector<std::vector<Point1D>> lData)
   return result;
 }
 
-/// @brief Check if a key is in a map
+/// @brief Check whether a key is in a map
 /// @tparam MapType
 /// @tparam KeyType
 /// @param map
@@ -156,11 +156,13 @@ bool isOnBoundary(const Point3D &p, std::pair<Point3D, Point3D> bbox)
   return false;
 }
 
-/// @brief Group a voxel in current cluster when it is unvisited without label
+/// @brief Push surrounding voxels which are unvisited and no label in local queue
 /// @param voxel
 /// @param mapVoxel
 /// @param queue
-void labelNeighbours(const AccVoxel &voxel, HashMapVoxel &mapVoxel, std::queue<AccVoxel> &queue)
+void labelNeighbours(const AccVoxel &voxel,
+                     HashMapVoxel &mapVoxel,
+                     std::queue<AccVoxel> &queue)
 {
 #ifdef DEBUG
   cout << "DEBUG: Current center is " << voxel.label
@@ -207,9 +209,15 @@ void labelNeighbours(const AccVoxel &voxel, HashMapVoxel &mapVoxel, std::queue<A
 /// @param globalPQ
 /// @param clusterLabel
 template <typename TypePQ>
-void processAccLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel)
+void processAccLabel(HashMapVoxel &mapVoxel,
+                     TypePQ &globalPQ,
+                     uint &clusterLabel,
+                     std::vector<std::vector<Uint>> &cluster)
 {
-  std::queue<AccVoxel> localQ; // maintain the local visited:
+  std::queue<AccVoxel> localQ;            // maintain the local visited:
+  cluster.push_back(std::vector<Uint>()); // init the empty cluster 0
+  Uint countPush = 0;
+
   for (auto v : mapVoxel)
     globalPQ.push(v.second);
   cout << "SUCCESS: Loaded global queue size is " << globalPQ.size() << endl;
@@ -232,14 +240,19 @@ void processAccLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabe
 
     // LOOP II: traverse the adjacent voxels
 
-    // Select a new cluster starting voxel update the current cluster label
+    // Form a new cluster, push the first voxel and update the current cluster label
     mapVoxel.at(idCurrent).visited = true;
     mapVoxel.at(idCurrent).label = ++clusterLabel;
     vCurrent.label = clusterLabel;
+    cluster.push_back(std::vector<Uint>());
+    cluster[clusterLabel].push_back(idCurrent);
 
 #ifdef DEBUG
+    cout << "DEBUG: (" << ++countPush << ") push " << mapVoxel.at(idCurrent).p
+         << " in cluster " << clusterLabel << " and set visited" << endl;
     cout << "DEBUG: Current cluster center is " << pCurrent
          << " -> " << vCurrent.label << endl;
+
     cout << "DEBUG: Remain(G): " << globalPQ.size() << endl;
 #endif
 
@@ -265,8 +278,9 @@ void processAccLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabe
         cout << "ERROR: " << pAdjacent << " is not visited and no label" << endl;
       }
 
-      // mark visited and label rest neighbors
+      // mark visited, store in a cluster and label rest neighbors
       mapVoxel.at(idAdjacent).visited = true;
+      cluster[clusterLabel].push_back(idAdjacent);
       localQ.pop();
       labelNeighbours(vAdjacent, mapVoxel, localQ);
     }
@@ -282,13 +296,18 @@ void processAccLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabe
 /// @param clusterLabel
 /// @param theta
 template <typename TypePQ>
-void processConfLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLabel, float theta = 0.0f)
+void processConfLabel(HashMapVoxel &mapVoxel,
+                      TypePQ &globalPQ,
+                      uint &clusterLabel,
+                      std::vector<std::vector<Uint>> &cluster,
+                      float theta = 0.0f)
 {
   Uint countFilterTimes = 0;
   Uint sizeLocalQueue = 0;
-  std::queue<AccVoxel> localQ; // maintain the local visited:
+  std::queue<AccVoxel> localQ;            // maintain the local visited:
+  cluster.push_back(std::vector<Uint>()); // init the empty cluster 0
+  Uint countPush = 0;
 
-  cout << "DEBUG: globalQ type is " << typeid(decltype(globalPQ)).name() << endl;
   for (auto &v : mapVoxel)
   {
     if (v.second.confs > theta && v.second.votes > 0)
@@ -327,8 +346,12 @@ void processConfLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLab
     mapVoxel.at(idCurrent).visited = true;
     mapVoxel.at(idCurrent).label = ++clusterLabel;
     vCurrent.label = clusterLabel;
+    cluster.push_back(std::vector<Uint>());
+    cluster[clusterLabel].push_back(idCurrent);
 
 #ifdef DEBUG
+    cout << "DEBUG: (" << ++countPush << ") push " << mapVoxel.at(idCurrent).p
+         << " in cluster " << clusterLabel << " and set visited" << endl;
     cout << "DEBUG: Current cluster center is " << pCurrent
          << " -> " << vCurrent.label << endl;
     cout << "DEBUG: Remain(G): " << globalPQ.size() << endl;
@@ -356,9 +379,12 @@ void processConfLabel(HashMapVoxel &mapVoxel, TypePQ &globalPQ, uint &clusterLab
         cout << "ERROR: " << pAdjacent << " is not visited and no label" << endl;
       }
 
-      // mark visited and label rest neighbors
+      // mark visited, store in a cluster and label rest neighbors
       mapVoxel.at(idAdjacent).visited = true;
+      cluster[clusterLabel].push_back(idAdjacent);
+
       localQ.pop();
+
       labelNeighbours(vAdjacent, mapVoxel, localQ);
     }
   }
@@ -376,7 +402,11 @@ void computeConfidence(HashMapVoxel &mapVoxel, float theta)
   }
 }
 
-void loadGradientShader(ofstream &fs, string &filename, HashMapVoxel &mapVoxel, DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh, uint clusterLabel)
+void outputGradientShader(ofstream &fs,
+                          string &filename,
+                          HashMapVoxel &mapVoxel,
+                          DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh,
+                          uint clusterLabel)
 {
   GradientColorMap<Uint> cmap_grad(0, clusterLabel); // watch out the interval boundary
   cmap_grad.addColor(Color(0, 0, 255));
@@ -408,7 +438,11 @@ void loadGradientShader(ofstream &fs, string &filename, HashMapVoxel &mapVoxel, 
   }
 }
 
-void loadHueShader(ofstream &fs, string &filename, HashMapVoxel &mapVoxel, DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh, uint clusterLabel)
+void outputHueShader(ofstream &fs,
+                     string &filename,
+                     HashMapVoxel &mapVoxel,
+                     DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh,
+                     uint clusterLabel)
 {
   HueShadeColorMap<Uint> aColorMap(0, clusterLabel);
 
@@ -465,7 +499,7 @@ int main(int argc, char **argv)
   app.add_option("-s,--shaderColor,4", shaderMode, "Input 1 for Hue Shader.\n"
                                                    "Input 0 or default for Gradient Shader.\n");
   app.add_option("-t,--threshold,5", theta, "Threshold value [0,1] for confidence segemention.\n");
-  app.add_option("-o,--output,5", outputFileName, "an output file ");
+  app.add_option("-o,--output,6", outputFileName, "an output file ");
 
   app.get_formatter()
       ->column_width(40);
@@ -500,6 +534,8 @@ int main(int argc, char **argv)
 
 #pragma region 2) traverse the 3D space voxels
 
+  std::vector<std::vector<Uint>> globalCluster; // store the voxels hash value in each cluster
+
   uint clusterLabel = 0;
   if (outputMode == 2)
   {
@@ -507,7 +543,7 @@ int main(int argc, char **argv)
     cout << "NOTICE: Segment based on confidence(ratio): " << endl;
     std::priority_queue<AccVoxel, std::vector<AccVoxel>, CompareConfsAsc> globalPQ;
     computeConfidence(mapVoxel, theta);
-    processConfLabel(mapVoxel, globalPQ, clusterLabel, theta);
+    processConfLabel(mapVoxel, globalPQ, clusterLabel, globalCluster, theta);
   }
   else if (outputMode == 1)
   {
@@ -515,7 +551,7 @@ int main(int argc, char **argv)
     cout << "NOTICE: Segment based on accumulation(value): " << endl;
     // std::priority_queue<AccVoxel, std::vector<AccVoxel>, CompareAccAsc> globalPQ;
     std::priority_queue<AccVoxel> globalPQ;
-    processAccLabel(mapVoxel, globalPQ, clusterLabel);
+    processAccLabel(mapVoxel, globalPQ, clusterLabel, globalCluster);
   }
   else
   {
@@ -533,12 +569,12 @@ int main(int argc, char **argv)
   if (shaderMode == 0)
   {
     cout << "NOTICE: Colored with Gradient shader map." << endl;
-    loadGradientShader(fout, outputSDPName, mapVoxel, aMesh, clusterLabel);
+    outputGradientShader(fout, outputSDPName, mapVoxel, aMesh, clusterLabel);
   }
   else if (shaderMode == 1)
   {
     cout << "NOTICE: Colored with Hue shader map." << endl;
-    loadHueShader(fout, outputSDPName, mapVoxel, aMesh, clusterLabel);
+    outputHueShader(fout, outputSDPName, mapVoxel, aMesh, clusterLabel);
   }
   fout.close();
   cout << "NOTICE: Export output in: " << outputSDPName << endl;

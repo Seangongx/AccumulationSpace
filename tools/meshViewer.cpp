@@ -172,6 +172,7 @@ int main(int argc, char **argv)
   std::vector<unsigned int> customColorSDP;
   std::vector<unsigned int> customLineColor;
   std::vector<unsigned int> customBGColor;
+  std::vector<unsigned int> customAlphaMesh;
   std::vector<unsigned int> vectFieldIndices = {0, 1, 2, 3, 4, 5};
   std::string displayVectorField;
 
@@ -183,7 +184,6 @@ int main(int argc, char **argv)
   bool useLastCamSet{false};
   bool fixLightToScene{false};
   float ambiantLight{0.0};
-  std::vector<unsigned int> customAlphaMesh;
 
   // parse command line using CLI ----------------------------------------------
   CLI::App app;
@@ -198,9 +198,8 @@ int main(int argc, char **argv)
   app.add_option("-z,--scaleZ", sz, "set the scale value in the z direction (default 1.0)");
   app.add_option("--minLineWidth", lineWidth, "set the min line width of the mesh faces (default 1.5)", true);
   app.add_option("--customColorMesh", customColorMesh, "set the R, G, B, A components of the colors of the mesh faces and eventually the color R, G, B, A of the mesh edge lines (set by default to black).");
-  app.add_option("--customAlphaMesh", customAlphaMesh, "set the alpha components of the colors of the mesh faces (can be applied for each mesh).");
-
-  app.add_option("--customColorSDP", customColorSDP, "set the R, G, B, A components of the colors of  the sdp view")
+  app.add_option("--customAlphaMesh", customAlphaMesh, "set the alpha(A) components of the colors of the mesh faces (can be applied for each mesh).");
+  app.add_option("--customColorSDP", customColorSDP, "set the R, G, B, A components of the colors of the sdp view")
       ->expected(4);
   app.add_option("--displayVectorField,-f", displayVectorField, "display a vector field from a simple sdp file (two points per line)");
   app.add_option("--vectorFieldIndex", vectFieldIndices, "specify special indices for the two point coordinates (instead usinf the default indices: 0 1, 2, 3, 4, 5)")
@@ -331,30 +330,31 @@ int main(int argc, char **argv)
   trace.info() << "[done]. " << std::endl;
   if (filenameSDP != "")
   {
-    // vector<Z3i::RealPoint> vectPoints;
-    // vectPoints = PointListReader<Z3i::RealPoint>::getPointsFromFile(filenameSDP);
-    // viewer << CustomColors3D(Color(sdpColorR, sdpColorG, sdpColorB, sdpColorA),
-    //                          Color(sdpColorR, sdpColorG, sdpColorB, sdpColorA));
-    // for(unsigned int i=0;i< vectPoints.size(); i++){
-    //   viewer.addBall(vectPoints.at(i), ballRadius);
-    // }
-
-    auto vOrigins = DGtal::PointListReader<DGtal::PointVector<1, DGtal::int32_t>>::getPolygonsFromFile(filenameSDP);
-    trace.info() << "NOTICE: the file " << filenameSDP << " contains " << vOrigins[1].size() << " columns" << std::endl;
-    if (vOrigins[1].size() == 7)
+    if (customAlphaMesh.size() > 0)
     {
+      trace.info() << "New meshViewer" << std::endl;
+      auto vOrigins = PointListReader<PointVector<1, DGtal::int32_t>>::getPolygonsFromFile(filenameSDP);
       viewer << CustomColors3D(Color(sdpColorR, sdpColorG, sdpColorB, sdpColorA),
                                Color(sdpColorR, sdpColorG, sdpColorB, sdpColorA));
       for (auto l : vOrigins)
       {
         DGtal::Z3i::Point pt(l[0][0], l[1][0], l[2][0]);
-        DGtal::Color cl(l[3][0], l[4][0], l[5][0], 180);
+        DGtal::Color cl(l[3][0], l[4][0], l[5][0], sdpColorA);
         viewer.setFillColor(cl);
         viewer.addBall(pt, ballRadius);
       }
     }
     else
-      trace.info() << "Error: the file " << filenameSDP << " does not contain 6 columns" << std::endl;
+    {
+      vector<Z3i::RealPoint> vectPoints;
+      vectPoints = PointListReader<Z3i::RealPoint>::getPointsFromFile(filenameSDP);
+      viewer << CustomColors3D(Color(sdpColorR, sdpColorG, sdpColorB, sdpColorA),
+                               Color(sdpColorR, sdpColorG, sdpColorB, sdpColorA));
+      for (unsigned int i = 0; i < vectPoints.size(); i++)
+      {
+        viewer.addBall(vectPoints.at(i), ballRadius);
+      }
+    }
   }
   if (invertNormal)
   {

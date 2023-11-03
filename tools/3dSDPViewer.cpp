@@ -73,7 +73,7 @@ typedef Viewer3D<Z3i::Space, Z3i::KSpace> Viewer;
    -l,--lineColor INT x 4                set the color of line: r g b a.
    -m,--addMesh TEXT                     append a mesh (off/obj) to the point set visualization.
    --customColorMesh UINT x 4            set the R, G, B, A components of the colors of the mesh faces (mesh added with option --addMesh).
-   --customAlphaMesh UINT ...            set the alpha components of the colors of the mesh faces (can be applied for each mesh).
+   --customAlphaMesh UINT                set single alpha(A) components of the colors of the mesh faces (mesh added with option --addMesh).
    --importColors                        import point colors from the input file (R G B colors should be by default at index 3, 4, 5).
    --setColorsIndex UINT x 3 Needs: --importColors
                                          customize the index of the imported colors in the source file (used by --importColor). By default the initial indexes are 3, 4, 5.
