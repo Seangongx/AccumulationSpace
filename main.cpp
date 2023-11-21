@@ -44,7 +44,9 @@
 #include "AccVoxelHelper.h"
 #include <DGtal/io/colormaps/GradientColorMap.h>
 #include "DGtal/io/colormaps/HueShadeColorMap.h"
+#include "DGtal/io/colormaps/RandomColorMap.h"
 #include <type_traits>
+#include <chrono>
 
 ///////////////////////////////////////////////////////////////////////////////
 using namespace std;
@@ -408,10 +410,10 @@ void outputGradientShader(ofstream &fs,
                           DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh,
                           uint clusterLabel)
 {
-  GradientColorMap<Uint> cmap_grad(0, clusterLabel); // watch out the interval boundary
-  cmap_grad.addColor(Color(0, 0, 255));
-  cmap_grad.addColor(Color(255, 0, 0));
-  cmap_grad.addColor(Color(255, 255, 0));
+  GradientColorMap<Uint, CMAP_JET> cmap_grad(0, clusterLabel); // watch out the interval boundary
+  cmap_grad.addColor(Color::Red);
+  cmap_grad.addColor(Color::Yellow);
+  cmap_grad.addColor(Color::Blue);
 
   for (auto v : mapVoxel)
   {
@@ -472,6 +474,46 @@ void outputHueShader(ofstream &fs,
   }
 }
 
+void outputRandomShader(ofstream &fs,
+                        string &filename,
+                        HashMapVoxel &mapVoxel,
+                        DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh,
+                        uint clusterLabel)
+{
+  RandomColorMap aColorMap(0, clusterLabel);
+  aColorMap.addColor(Color::Red);
+  aColorMap.addColor(Color::Green);
+  aColorMap.addColor(Color::Blue);
+  aColorMap.addColor(Color::Yellow);
+  aColorMap.addColor(Color::White);
+  aColorMap.addColor(Color::Black);
+
+  for (auto v : mapVoxel)
+  {
+    if (mapVoxel.at(v.first).label == 0)
+    {
+#ifdef DEBUG
+      cout << "DEBUG: " << v.second.p << " is " << v.second.visited << " and igonred with no label" << endl;
+#endif
+      continue;
+    }
+    Color cTemp = aColorMap(mapVoxel.at(v.first).label);
+    // SDP color
+    fs << v.second.p[0] << " "
+       << v.second.p[1] << " "
+       << v.second.p[2] << " "
+       << int(cTemp.red()) << " "
+       << int(cTemp.green()) << " "
+       << int(cTemp.blue()) << " "
+       << endl;
+    // Faces color
+    for (auto f : v.second.faces)
+    {
+      aMesh.setFaceColor(f, cTemp);
+    }
+  }
+}
+
 int main(int argc, char **argv)
 {
 
@@ -479,8 +521,9 @@ int main(int argc, char **argv)
   // parse command line using CLI ----------------------------------------------
   CLI::App app;
   std::string inputFileName;
-  std::string colorFileName;
-  std::string outputFileName;
+  std::string extraDataName;
+  std::string outputMeshName;
+  std::string outputSDPName;
   char outputMode = 2;
   char shaderMode = 0;
   float theta = 0.5f;
@@ -490,7 +533,7 @@ int main(int argc, char **argv)
   app.add_option("-i,--input,1", inputFileName, "an input mesh file in .obj format.")
       ->required()
       ->check(CLI::ExistingFile);
-  app.add_option("-c,--colorFile,2", colorFileName, "an input file containing accumulation, confidence and index to colored.")
+  app.add_option("-c,--colorFile,2", extraDataName, "an input file containing accumulation, confidence and index to colored.")
       ->required()
       ->check(CLI::ExistingFile);
   app.add_option("-m,--outputMode,3", outputMode, "Input 2 for confidence segemention.\n"
@@ -499,7 +542,8 @@ int main(int argc, char **argv)
   app.add_option("-s,--shaderColor,4", shaderMode, "Input 1 for Hue Shader.\n"
                                                    "Input 0 or default for Gradient Shader.\n");
   app.add_option("-t,--threshold,5", theta, "Threshold value [0,1] for confidence segemention.\n");
-  app.add_option("-o,--output,6", outputFileName, "an output file ");
+  app.add_option("--outputMesh,6", outputMeshName, "Output the colored mesh file ");
+  app.add_option("--outputSDP,7", outputSDPName, "Output the colored SDP file ");
 
   app.get_formatter()
       ->column_width(40);
@@ -524,13 +568,15 @@ int main(int argc, char **argv)
   HashMapVoxel mapVoxel;
 
   // store voxels in the map:
-  std::vector<AccVoxel> voxelList = AccVoxelHelper::getAccVoxelsFromFile(colorFileName);
+  std::vector<AccVoxel> voxelList = AccVoxelHelper::getAccVoxelsFromFile(extraDataName);
   for (auto &v : voxelList)
   {
     KeyType hashValue = AccVoxelHelper::hash(v.p);
     mapVoxel[hashValue] = v;
   }
 #pragma endregion
+
+  auto start = std::chrono::high_resolution_clock::now();
 
 #pragma region 2) traverse the 3D space voxels
 
@@ -561,10 +607,16 @@ int main(int argc, char **argv)
 
 #pragma endregion
 
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> duration = end - start;
+  std::cout << "TIME: Compute clusters elapsed " << duration.count() << " seconds." << std::endl;
+
 #pragma region 3) color the Sequence Discrete Point(SDP) and faces
 
   ofstream fout;
-  string outputSDPName = colorFileName.substr(0, colorFileName.length() - 4) + "_SDP.dat";
+
+  if (outputSDPName.empty())
+    outputSDPName = extraDataName.substr(0, extraDataName.length() - 4) + "_SDP.dat";
   fout.open(outputSDPName);
   if (shaderMode == 0)
   {
@@ -576,17 +628,23 @@ int main(int argc, char **argv)
     cout << "NOTICE: Colored with Hue shader map." << endl;
     outputHueShader(fout, outputSDPName, mapVoxel, aMesh, clusterLabel);
   }
+  else if (shaderMode == 2)
+  {
+    cout << "NOTICE: Colored with Random shader map1." << endl;
+    outputRandomShader(fout, outputSDPName, mapVoxel, aMesh, clusterLabel);
+  }
+
   fout.close();
   cout << "NOTICE: Export output in: " << outputSDPName << endl;
 
-  if (outputFileName.empty())
+  if (outputMeshName.empty())
   {
     int inputSuffix = inputFileName.length() - 4; // .obj or .off
-    string filename = colorFileName.substr(0, colorFileName.length() - 4);
+    string filename = extraDataName.substr(0, extraDataName.length() - 4);
     if (outputMode == 2)
-      outputFileName = filename + "_ConfColored" + inputFileName.substr(inputSuffix);
+      outputMeshName = filename + "_ConfColored" + inputFileName.substr(inputSuffix);
     else if (outputMode == 1)
-      outputFileName = filename + "_AccColored" + inputFileName.substr(inputSuffix);
+      outputMeshName = filename + "_AccColored" + inputFileName.substr(inputSuffix);
     else
     {
       cout << "TODO: uncomplished functionality and stop the program." << endl;
@@ -594,9 +652,9 @@ int main(int argc, char **argv)
       return 0;
     }
   }
-  fout.open(outputFileName);
-  aMesh >> outputFileName;
-  cout << "NOTICE: Export output in: " << outputFileName << endl
+  fout.open(outputMeshName);
+  aMesh >> outputMeshName;
+  cout << "NOTICE: Export output in: " << outputMeshName << endl
        << endl;
   fout.close();
 
