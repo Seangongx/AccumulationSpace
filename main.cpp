@@ -19,7 +19,7 @@
  * @ingroup geometry3d
  * @author Bertrand Kerautret (\c bertrand.kerautret@univ-lyon2.fr )
  * LIRIS (CNRS, UMR 5205), University of Lyon 2, France
- * @author Xun Gong (\c xun.gong@telecom-paris.fr )
+ * @author Xun Gong (\c sean.gong814@gmail.com )
  *
  * @date 2023/10/06
  *
@@ -32,34 +32,34 @@
 #include <iostream>
 #include <fstream>
 #include <cstddef>
+#include <ctime>  // for time display
+#include <chrono> // for timekeeping
+// DGtal library
 #include "DGtal/base/Common.h"
-// #include "DGtal/images/ImageContainerByHashTree.h"
-#include <DGtal/images/ImageContainerBySTLMap.h>
+#include "DGtal/helpers/StdDefs.h"
 #include "DGtal/io/readers/MeshReader.h"
 #include "DGtal/io/writers/MeshWriter.h"
 #include "DGtal/io/readers/PointListReader.h"
-#include "DGtal/helpers/StdDefs.h"
+#include "DGtal/io/colormaps/GradientColorMap.h"
+#include "DGtal/io/colormaps/HueShadeColorMap.h"
+#include "DGtal/io/colormaps/RandomColorMap.h"
+#include "DGtal/images/ImageContainerBySTLMap.h"
+// Other dependencies
 #include "CLI11.hpp"
 #include "AccVoxel.h"
 #include "AccVoxelHelper.h"
-#include <DGtal/io/colormaps/GradientColorMap.h>
-#include "DGtal/io/colormaps/HueShadeColorMap.h"
-#include "DGtal/io/colormaps/RandomColorMap.h"
-#include <type_traits>
-#include <chrono>
 
 ///////////////////////////////////////////////////////////////////////////////
 using namespace std;
 using namespace DGtal;
-///////////////////////////////////////////////////////////////////////////////
 // #define DEBUG
+///////////////////////////////////////////////////////////////////////////////
 
 /**
- @page segmentFromAcc segmentFromAcc
+ @page segmentFromAcc
 
- @brief get accumulation or confidence clusters based on the accumulation image and
-  color the associate segement on the original mesh.
-
+ @brief get accumulation or confidence clusters based on the accumulation image meanwhile
+  paint the associate colored segement on the original mesh.
 
  @code
  Typical use example:
@@ -91,6 +91,39 @@ using namespace DGtal;
  */
 
 #pragma region Type Definitions
+
+// define message function
+enum LogLevel
+{
+  INFO,
+  WARNING,
+  ERROR,
+};
+
+void printMessage(const std::string &message, LogLevel level = INFO)
+{
+  const char *levelStr;
+  switch (level)
+  {
+  case INFO:
+    levelStr = "[INFO]";
+    break;
+  case WARNING:
+    levelStr = "[WARNING]";
+    break;
+  case ERROR:
+    levelStr = "[ERROR]";
+    break;
+  }
+
+  // 获取当前时间
+  std::time_t now = std::time(nullptr);
+  char buf[100];
+  std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
+
+  std::cout << buf << " " << levelStr << " " << message << std::endl;
+}
+
 typedef std::priority_queue<int, std::vector<int>, CompareConfsAsc> Test;
 typedef DGtal::uint32_t Uint;
 typedef DGtal::Z3i::Point Point3D;                     // Interger 3D point ( Z3i )
@@ -99,37 +132,8 @@ typedef DGtal::PointVector<1, DGtal::int32_t> Point1D; // Point include 1 dimens
 typedef SpaceND<3> Space;
 typedef HyperRectDomain<Space> Dom;
 typedef std::map<Uint, AccVoxel> HashMapVoxel; // Map id to voxel
-// typedef DGtal::ImageContainerBySTLMap<Dom, MyVoxel> HashMapVoxel;
 
 #pragma endregion
-
-std::pair<Point3D, Point3D>
-getBoundingBox(std::vector<std::vector<Point1D>> lData)
-{
-  std::pair<Point3D, Point3D> result(Point3D(std::numeric_limits<int>::max(),
-                                             std::numeric_limits<int>::max(),
-                                             std::numeric_limits<int>::max()),
-                                     Point3D(std::numeric_limits<int>::min(),
-                                             std::numeric_limits<int>::min(),
-                                             std::numeric_limits<int>::min()));
-  for (auto lP : lData)
-  {
-    Point3D p(lP[0][0], lP[1][0], lP[2][0]);
-    for (int i = 0; i < 3; i++)
-    {
-      if (result.first[i] > p[i])
-      {
-        result.first[i] = p[i];
-      }
-      if (result.second[i] < p[i])
-      {
-        result.second[i] = p[i];
-      }
-    }
-  }
-
-  return result;
-}
 
 /// @brief Check whether a key is in a map
 /// @tparam MapType
@@ -222,7 +226,8 @@ void processAccLabel(HashMapVoxel &mapVoxel,
 
   for (auto v : mapVoxel)
     globalPQ.push(v.second);
-  cout << "SUCCESS: Loaded global queue size is " << globalPQ.size() << endl;
+
+  printMessage("Loaded global queue size is " + std::to_string(globalPQ.size()));
 
   // LOOP I: select the next voxel with the highest votes
   while (!globalPQ.empty())
@@ -235,7 +240,7 @@ void processAccLabel(HashMapVoxel &mapVoxel,
     {
       globalPQ.pop();
 #ifdef DEBUG
-      cout << "DEBUG: Pop(G): " << pCurrent << " and remain " << globalPQ.size() << endl;
+      printMessage("Pop(G): " + std::to_string(pCurrent) + " and remain " + std::to_string(globalPQ.size()));
 #endif
       continue;
     }
@@ -528,8 +533,14 @@ int main(int argc, char **argv)
   char shaderMode = 0;
   float theta = 0.5f;
 
-  app.description("Converts a .obj mesh into the .off format.\n"
-                  "Typical use example:\n \t meshColorFromIndex -i file.obj -o file.off \n");
+  app.description("Loads an .obj mesh and an .off extracted accumulation then generate a .obj colored mesh and a SDP file\n"
+                  "Typical use example:\n "
+                  "\t ./segmentFromAcc \n"
+                  "\t ${modelDir}/${modelName}.off \n"
+                  "\t ${modelDir}/${sheetName}.dat \n"
+                  "\t ${mode} \n"
+                  "\t ${shader} \n"
+                  "\t ${theta} \n");
   app.add_option("-i,--input,1", inputFileName, "an input mesh file in .obj format.")
       ->required()
       ->check(CLI::ExistingFile);
@@ -551,16 +562,9 @@ int main(int argc, char **argv)
   // END parse command line using CLI ----------------------------------------------
 #pragma endregion
 
-  // typedef DGtal::experimental::ImageContainerByHashTree<Dom, DGtal::Z3i::Point, DGtal::uint64_t> HashTreeVertex;
-
   // read input mesh
   DGtal::Mesh<DGtal::Z3i::RealPoint> aMesh(true);
   aMesh << inputFileName;
-  // auto vOrigins = DGtal::PointListReader<Point1D>::getPolygonsFromFile(colorFileName);
-  // auto bbox = getBoundingBox(vOrigins);
-  // std::cout << "bounding box" << bbox.first << " " << bbox.second << std::endl;
-  // // domain creation:
-  // Dom aDomain(bbox.first, bbox.second);
 
 #pragma region 1) Map creation
   // HashMapVoxel mapVoxel(aDomain);

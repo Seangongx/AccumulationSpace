@@ -1,6 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.11)
 
-PROJECT(AccSpaceExe)
+PROJECT(segmentFromAcc)
 
 ### Require C++17 standard
 set(CMAKE_CXX_STANDARD 17)  
@@ -26,9 +26,9 @@ SET (QGLVIEWER_LIBRARIES  "/usr/local/lib/libQGLViewer-qt5.so")
 
 ### Generate Project
 add_subdirectory(tools)
-ADD_EXECUTABLE(AccSpaceExe ${AS_SOURCE_FILE} main.cpp)
+ADD_EXECUTABLE(segmentFromAcc ${AS_SOURCE_FILE} main.cpp)
 ### include directories
-target_include_directories(AccSpaceExe
+target_include_directories(segmentFromAcc
 PRIVATE
     ${PROJECT_SOURCE_DIR}/src
     ${DGTAL_INCLUDE_DIRS}
@@ -37,7 +37,7 @@ PRIVATE
 )
 
 ### link directories
-TARGET_LINK_LIBRARIES(AccSpaceExe 
+TARGET_LINK_LIBRARIES(segmentFromAcc 
 PRIVATE
     ${DGTAL_LIBRARIES} 
     Qt5::Core Qt5::Widgets Qt5::OpenGL
