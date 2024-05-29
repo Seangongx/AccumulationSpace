@@ -18,6 +18,7 @@
 
 /// @brief Defined in AccVoxelHelper.h
 typedef size_t KeyType;
+#define HelperDebug
 
 struct
     CompareAccAsc
@@ -63,18 +64,19 @@ public:
                     accV.faces.push_back(l[i][0]);
                 }
                 resVectAcc.push_back(accV);
-            }
 
-#ifdef DEBUG
-            cout << endl;
-            cout << "P:" << accV.p << " | ";
-            cout << "votes:" << accV.votes << " -> ";
-            for (auto f : accV.faces)
-            {
-                cout << f << " ";
-            }
-            cout << endl;
+#ifdef HelperDebug
+                std::cout << std::endl;
+                std::cout << "P:" << accV.p << " | ";
+                std::cout << "votes:" << accV.votes << " ";
+                std::cout << "confs:" << accV.confs << " -> ";
+                for (auto f : accV.faces)
+                {
+                    std::cout << f << " ";
+                }
+                std::cout << std::endl;
 #endif
+            }
         }
 
         return resVectAcc;
