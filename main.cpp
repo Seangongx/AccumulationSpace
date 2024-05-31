@@ -48,6 +48,8 @@
 #include "CLI11.hpp"
 #include "AccVoxel.h"
 #include "AccVoxelHelper.h"
+#include "Timer.h"
+#include "Menu.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 using namespace std;
@@ -63,26 +65,28 @@ using namespace DGtal;
 
  @code
  Typical use example:
-     segmentFromAcc -i file.obj -o file.off
+     [path to the project] segmentFromAcc -i file.obj -o file.off -m modevalue -s shadervalue -t thetavalue
 
  Usage: ./expe/segmentFromAcc [OPTIONS] 1 [2]
 
  Positionals:
    1 TEXT:FILE REQUIRED                  an input mesh file in .obj or .off format.
-   2 TEXT                                an output file
+   2 TEXT:FILE REQUIRED                  n output file
+   3 VALUE:REQUIRED                      select confidence (2), accumulation (1), and both by default(0) mode
+   4 VALUE:REQUIRED                      select HueShader (1) or GradientShader (0) mode
+   5 VALUE:REQUIRED                      select threshold value for confidence mode
 
  Options:
    -h,--help                             Print this help message and exit
    -i,--input TEXT:FILE REQUIRED         an input mesh file in .obj or .off format.
    -o,--output TEXT                      an output file
 
-
  @endcode
 
  @b Example:
 
  @code
- segmentFromAcc $DGtal/examples/samples/am_beech2-3.off am_beech2-3Acc.dat 0 0
+ segmentFromAcc $DGtal/examples/samples/am_beech2-3.off am_beech2-3Acc.dat 2 0 0.8
  @endcode
 
  @see
@@ -98,6 +102,7 @@ enum LogLevel
   INFO,
   WARNING,
   ERROR,
+  DEBUG
 };
 
 void printMessage(const std::string &message, LogLevel level = INFO)
@@ -114,33 +119,31 @@ void printMessage(const std::string &message, LogLevel level = INFO)
   case ERROR:
     levelStr = "[ERROR]";
     break;
+  case DEBUG:
+    levelStr = "[DEBUG]";
+    break;
   }
 
   // 获取当前时间
   std::time_t now = std::time(nullptr);
   char buf[100];
-  std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
-
+  std::strftime(buf, sizeof(buf), "%d %H:%M:%S", std::localtime(&now));
   std::cout << buf << " " << levelStr << " " << message << std::endl;
 }
 
-typedef std::priority_queue<int, std::vector<int>, CompareConfsAsc> Test;
+// DGtal definitions
+typedef DGtal::SpaceND<3> Space;
+typedef DGtal::HyperRectDomain<Space> Dom;
 typedef DGtal::uint32_t Uint;
-typedef DGtal::Z3i::Point Point3D;                     // Interger 3D point ( Z3i )
-typedef DGtal::PointVector<1, DGtal::int32_t> Point1D; // Point include 1 dimension
-
-typedef SpaceND<3> Space;
-typedef HyperRectDomain<Space> Dom;
-typedef std::map<Uint, AccVoxel> HashMapVoxel; // Map id to voxel
+typedef DGtal::Z3i::Point Point3D; // Interger 3D point ( Z3i )
+typedef DGtal::PointVector<1, DGtal::int32_t> Point1D;
+typedef DGtal::Mesh<DGtal::Z3i::RealPoint> RealMesh;
+// STD definiations
+typedef map<Uint, AccVoxel> HashMapVoxel; // Map id to voxel
+typedef priority_queue<int, vector<int>, CompareConfsAsc> Test;
 
 #pragma endregion
 
-/// @brief Check whether a key is in a map
-/// @tparam MapType
-/// @tparam KeyType
-/// @param map
-/// @param key
-/// @return true(exist) or false(not exist)
 template <typename MapType, typename KeyType>
 bool mapKeychecker(const MapType &map, const KeyType &key)
 {
@@ -155,9 +158,7 @@ bool isOnBoundary(const Point3D &p, std::pair<Point3D, Point3D> bbox)
   for (int i = 0; i < 3; i++)
   {
     if (p[i] == bbox.first[i] || p[i] == bbox.second[i])
-    {
       return true;
-    }
   }
   return false;
 }
@@ -166,44 +167,36 @@ bool isOnBoundary(const Point3D &p, std::pair<Point3D, Point3D> bbox)
 /// @param voxel
 /// @param mapVoxel
 /// @param queue
-void labelNeighbours(const AccVoxel &voxel,
-                     HashMapVoxel &mapVoxel,
-                     std::queue<AccVoxel> &queue)
+void markNeighbours(const AccVoxel &voxel,
+                    HashMapVoxel &mapVoxel,
+                    std::queue<AccVoxel> &queue)
 {
 #ifdef DEBUG
-  cout << "DEBUG: Current center is " << voxel.label
-       << " -> " << voxel.p << endl;
+  cout << "DEBUG: Current center is " << voxel.label << " -> " << voxel.p << endl;
 #endif
-
   int gridStep = 1;
-  for (int dx = -gridStep; dx <= gridStep; ++dx)
-  {
-    for (int dy = -gridStep; dy <= gridStep; ++dy)
-    {
-      for (int dz = -gridStep; dz <= gridStep; ++dz)
-      {
-        // locate the adjacent voxel id
-        Point3D pTemp(voxel.p[0] + dx, voxel.p[1] + dy, voxel.p[2] + dz);
-        auto idTemp = AccVoxelHelper::hash(pTemp);
+  std::vector<std::tuple<int, int, int>> neighbors = {
+      {-gridStep, -gridStep, -gridStep}, {-gridStep, -gridStep, 0}, {-gridStep, -gridStep, gridStep}, {-gridStep, 0, -gridStep}, {-gridStep, 0, 0}, {-gridStep, 0, gridStep}, {-gridStep, gridStep, -gridStep}, {-gridStep, gridStep, 0}, {-gridStep, gridStep, gridStep}, {0, -gridStep, -gridStep}, {0, -gridStep, 0}, {0, -gridStep, gridStep}, {0, 0, -gridStep}, {0, 0, gridStep}, {0, gridStep, -gridStep}, {0, gridStep, 0}, {0, gridStep, gridStep}, {gridStep, -gridStep, -gridStep}, {gridStep, -gridStep, 0}, {gridStep, -gridStep, gridStep}, {gridStep, 0, -gridStep}, {gridStep, 0, 0}, {gridStep, 0, gridStep}, {gridStep, gridStep, -gridStep}, {gridStep, gridStep, 0}, {gridStep, gridStep, gridStep}};
 
-        if (mapKeychecker(mapVoxel, idTemp))
-        {
-          // if (isOnBoundary(pAdjacent, bbox)) // skip the boundary voxel
-          //   continue;
-          if (mapVoxel.at(idTemp).visited) // skip the visited voxel
-            continue;
-          if (pTemp == voxel.p) // skip the center itself
-            continue;
-          if (mapVoxel.at(idTemp).label == 0)
-          {
-            mapVoxel.at(idTemp).label = voxel.label; // update the current cluster label in global map
-            queue.push(mapVoxel.at(idTemp));
+  for (const auto &[dx, dy, dz] : neighbors)
+  {
+    // locate the adjacent voxel id
+    Point3D pTemp(voxel.p[0] + dx, voxel.p[1] + dy, voxel.p[2] + dz);
+    auto idTemp = AccVoxelHelper::hash(pTemp);
+
+    if (mapKeychecker(mapVoxel, idTemp))
+    {
+      const auto &voxelTemp = mapVoxel.at(idTemp);
+      // if (isOnBoundary(pAdjacent, bbox)) // skip the boundary voxel
+      //   continue;
+      if (!voxelTemp.visited && pTemp != voxel.p && voxelTemp.label == 0) // skip the visited voxel and the center
+      {
+        mapVoxel.at(idTemp).label = voxel.label; // update the current cluster label in global map
+        queue.push(mapVoxel.at(idTemp));
 
 #ifdef DEBUG
-            cout << "DEBUG: Label in [" << voxel.label << "] and push " << mapVoxel.at(idTemp).p << endl;
+        cout << "DEBUG: Label in [" << voxel.label << "] and push " << mapVoxel.at(idTemp).p << endl;
 #endif
-          }
-        }
       }
     }
   }
@@ -217,7 +210,7 @@ void labelNeighbours(const AccVoxel &voxel,
 template <typename TypePQ>
 void processAccLabel(HashMapVoxel &mapVoxel,
                      TypePQ &globalPQ,
-                     uint &clusterLabel,
+                     Uint &clusterLabel,
                      std::vector<std::vector<Uint>> &cluster)
 {
   std::queue<AccVoxel> localQ;            // maintain the local visited:
@@ -240,7 +233,7 @@ void processAccLabel(HashMapVoxel &mapVoxel,
     {
       globalPQ.pop();
 #ifdef DEBUG
-      printMessage("Pop(G): " + std::to_string(pCurrent) + " and remain " + std::to_string(globalPQ.size()));
+      printMessage("Pop(G): " + std::to_string(idCurrent) + " and remain " + std::to_string(globalPQ.size()));
 #endif
       continue;
     }
@@ -263,7 +256,7 @@ void processAccLabel(HashMapVoxel &mapVoxel,
     cout << "DEBUG: Remain(G): " << globalPQ.size() << endl;
 #endif
 
-    labelNeighbours(vCurrent, mapVoxel, localQ);
+    markNeighbours(vCurrent, mapVoxel, localQ);
     while (!localQ.empty())
     {
       auto vAdjacent = localQ.front();
@@ -289,7 +282,7 @@ void processAccLabel(HashMapVoxel &mapVoxel,
       mapVoxel.at(idAdjacent).visited = true;
       cluster[clusterLabel].push_back(idAdjacent);
       localQ.pop();
-      labelNeighbours(vAdjacent, mapVoxel, localQ);
+      markNeighbours(vAdjacent, mapVoxel, localQ);
     }
   }
 
@@ -305,7 +298,7 @@ void processAccLabel(HashMapVoxel &mapVoxel,
 template <typename TypePQ>
 void processConfLabel(HashMapVoxel &mapVoxel,
                       TypePQ &globalPQ,
-                      uint &clusterLabel,
+                      Uint &clusterLabel,
                       std::vector<std::vector<Uint>> &cluster,
                       float theta = 0.0f)
 {
@@ -364,7 +357,7 @@ void processConfLabel(HashMapVoxel &mapVoxel,
     cout << "DEBUG: Remain(G): " << globalPQ.size() << endl;
 #endif
 
-    labelNeighbours(vCurrent, mapVoxel, localQ);
+    markNeighbours(vCurrent, mapVoxel, localQ);
     while (!localQ.empty())
     {
       auto vAdjacent = localQ.front();
@@ -392,7 +385,7 @@ void processConfLabel(HashMapVoxel &mapVoxel,
 
       localQ.pop();
 
-      labelNeighbours(vAdjacent, mapVoxel, localQ);
+      markNeighbours(vAdjacent, mapVoxel, localQ);
     }
   }
 
@@ -402,77 +395,93 @@ void processConfLabel(HashMapVoxel &mapVoxel,
 
 void computeConfidence(HashMapVoxel &mapVoxel, float theta)
 {
-  for (auto &v : mapVoxel)
+  for (auto &[key, voxel] : mapVoxel)
+    voxel.confs /= voxel.votes;
+}
+
+template <typename Shader>
+void shadeFaces(ofstream &fs,
+                HashMapVoxel &mapVoxel,
+                RealMesh &aMesh,
+                Uint clusterLabel)
+{
+  Shader colorMap(0, clusterLabel);
+  colorMap.addColor(Color::Red);
+  colorMap.addColor(Color::Yellow);
+  colorMap.addColor(Color::Blue);
+
+  for (const auto &[key, voxel] : mapVoxel)
   {
-    auto &voxel = v.second;
-    voxel.confs = voxel.confs * 1.0f / voxel.votes;
+    if (voxel.label == 0)
+    {
+      cout << "ERROR: " << voxel.p << " is " << voxel.visited << " and no label" << endl;
+      continue;
+    }
+    Color cTemp = cmap_grad(voxel.label);
+
+    // SDP color
+    fs << voxel.p[0] << " " << voxel.p[1] << " " << voxel.p[2] << " "
+       << int(cTemp.red()) << " " << int(cTemp.green()) << " " << int(cTemp.blue()) << " " << endl;
+    // Faces color
+    for (auto f : voxel.faces)
+    {
+      aMesh.setFaceColor(f, cTemp);
+    }
   }
 }
 
 void outputGradientShader(ofstream &fs,
-                          string &filename,
                           HashMapVoxel &mapVoxel,
-                          DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh,
-                          uint clusterLabel)
+                          RealMesh &aMesh,
+                          Uint clusterLabel)
 {
   GradientColorMap<Uint, CMAP_JET> cmap_grad(0, clusterLabel); // watch out the interval boundary
   cmap_grad.addColor(Color::Red);
   cmap_grad.addColor(Color::Yellow);
   cmap_grad.addColor(Color::Blue);
 
-  for (auto v : mapVoxel)
+  for (const auto &[key, voxel] : mapVoxel)
   {
-    if (mapVoxel.at(v.first).label == 0)
+    if (voxel.label == 0)
     {
-      cout << "ERROR: " << v.second.p << " is " << v.second.visited << " and no label" << endl;
+      cout << "ERROR: " << voxel.p << " is " << voxel.visited << " and no label" << endl;
       continue;
     }
-    Color cTemp = cmap_grad(mapVoxel.at(v.first).label);
+    Color cTemp = cmap_grad(voxel.label);
 
     // SDP color
-    fs << v.second.p[0] << " "
-       << v.second.p[1] << " "
-       << v.second.p[2] << " "
-       << int(cTemp.red()) << " "
-       << int(cTemp.green()) << " "
-       << int(cTemp.blue()) << " "
-       << endl;
+    fs << voxel.p[0] << " " << voxel.p[1] << " " << voxel.p[2] << " "
+       << int(cTemp.red()) << " " << int(cTemp.green()) << " " << int(cTemp.blue()) << " " << endl;
     // Faces color
-    for (auto f : v.second.faces)
+    for (auto f : voxel.faces)
     {
-      aMesh.setFaceColor(f, cmap_grad(mapVoxel.at(v.first).label));
+      aMesh.setFaceColor(f, cTemp);
     }
   }
 }
 
 void outputHueShader(ofstream &fs,
-                     string &filename,
                      HashMapVoxel &mapVoxel,
-                     DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh,
-                     uint clusterLabel)
+                     RealMesh &aMesh,
+                     Uint clusterLabel)
 {
   HueShadeColorMap<Uint> aColorMap(0, clusterLabel);
 
-  for (auto v : mapVoxel)
+  for (const auto &[key, voxel] : mapVoxel)
   {
-    if (mapVoxel.at(v.first).label == 0)
+    if (voxel.label == 0)
     {
 #ifdef DEBUG
-      cout << "DEBUG: " << v.second.p << " is " << v.second.visited << " and igonred with no label" << endl;
+      cout << "DEBUG: " << voxel.p << " is " << voxel.visited << " and ignored with no label" << endl;
 #endif
       continue;
     }
-    Color cTemp = aColorMap(mapVoxel.at(v.first).label);
+    Color cTemp = aColorMap(voxel.label);
     // SDP color
-    fs << v.second.p[0] << " "
-       << v.second.p[1] << " "
-       << v.second.p[2] << " "
-       << int(cTemp.red()) << " "
-       << int(cTemp.green()) << " "
-       << int(cTemp.blue()) << " "
-       << endl;
+    fs << voxel.p[0] << " " << voxel.p[1] << " " << voxel.p[2] << " "
+       << int(cTemp.red()) << " " << int(cTemp.green()) << " " << int(cTemp.blue()) << endl;
     // Faces color
-    for (auto f : v.second.faces)
+    for (auto f : voxel.faces)
     {
       aMesh.setFaceColor(f, cTemp);
     }
@@ -480,10 +489,9 @@ void outputHueShader(ofstream &fs,
 }
 
 void outputRandomShader(ofstream &fs,
-                        string &filename,
                         HashMapVoxel &mapVoxel,
-                        DGtal::Mesh<DGtal::Z3i::RealPoint> &aMesh,
-                        uint clusterLabel)
+                        RealMesh &aMesh,
+                        Uint clusterLabel)
 {
   RandomColorMap aColorMap(0, clusterLabel);
   aColorMap.addColor(Color::Red);
@@ -519,150 +527,112 @@ void outputRandomShader(ofstream &fs,
   }
 }
 
+void applyShaders(ofstream &fs,
+                  const string &filename,
+                  HashMapVoxel &mapVoxel,
+                  RealMesh &mesh,
+                  Uint clusterLabel,
+                  MenuMode shaderMode)
+{
+  fs.open(filename);
+
+  switch (shaderMode)
+  {
+  case 0:
+    printMessage("colored with Gradient shader map.", INFO);
+    outputGradientShader(fs, mapVoxel, mesh, clusterLabel);
+    break;
+  case 1:
+    printMessage("Colored with Hue shader map.", INFO);
+    outputHueShader(fs, mapVoxel, mesh, clusterLabel);
+    break;
+  case 2:
+    printMessage("Colored with Random shader map.", INFO);
+    outputRandomShader(fs, mapVoxel, mesh, clusterLabel);
+    break;
+  default:
+    printMessage("Invalid shader mode." + to_string(shaderMode), ERROR);
+  }
+
+  fs.close();
+}
+
+void assignOutputName(CLIMENU &menu)
+{
+  if (menu.outputMesh.empty())
+  {
+    int inputSuffix = menu.inputFile.length() - 4; // .obj or .off
+    int extraSuffix = menu.extraData.length() - 4; // .dat
+    string extraFileName = menu.extraData.substr(0, extraSuffix);
+    if (menu.outputMode == 2)
+      menu.outputMesh = extraFileName + "_ConfColored" + menu.inputFile.substr(inputSuffix);
+    else if (menu.outputMode == 1)
+      menu.outputMesh = extraFileName + "_AccColored" + menu.inputFile.substr(inputSuffix);
+    else
+    {
+      printMessage("Invalid functionality and stop the program.", ERROR);
+    }
+  }
+}
+
 int main(int argc, char **argv)
 {
+  // parse command line using CLI
+  CLIMENU appMenu;
+  appMenu.menuParse(argc, argv);
 
-#pragma region 0) parse command line using ----------------------------------------------
-  // parse command line using CLI ----------------------------------------------
-  CLI::App app;
-  std::string inputFileName;
-  std::string extraDataName;
-  std::string outputMeshName;
-  std::string outputSDPName;
-  char outputMode = 2;
-  char shaderMode = 0;
-  float theta = 0.5f;
+  RealMesh aMesh(true);
+  aMesh << appMenu.inputFile; // read input mesh
 
-  app.description("Loads an .obj mesh and an .off extracted accumulation then generate a .obj colored mesh and a SDP file\n"
-                  "Typical use example:\n "
-                  "\t ./segmentFromAcc \n"
-                  "\t ${modelDir}/${modelName}.off \n"
-                  "\t ${modelDir}/${sheetName}.dat \n"
-                  "\t ${mode} \n"
-                  "\t ${shader} \n"
-                  "\t ${theta} \n");
-  app.add_option("-i,--input,1", inputFileName, "an input mesh file in .obj format.")
-      ->required()
-      ->check(CLI::ExistingFile);
-  app.add_option("-c,--colorFile,2", extraDataName, "an input file containing accumulation, confidence and index to colored.")
-      ->required()
-      ->check(CLI::ExistingFile);
-  app.add_option("-m,--outputMode,3", outputMode, "Input 2 for confidence segemention.\n"
-                                                  "Input 1 for accmulation segementation.\n"
-                                                  "Input 0 for both by default.\n");
-  app.add_option("-s,--shaderColor,4", shaderMode, "Input 1 for Hue Shader.\n"
-                                                   "Input 0 or default for Gradient Shader.\n");
-  app.add_option("-t,--threshold,5", theta, "Threshold value [0,1] for confidence segemention.\n");
-  app.add_option("--outputMesh,6", outputMeshName, "Output the colored mesh file ");
-  app.add_option("--outputSDP,7", outputSDPName, "Output the colored SDP file ");
-
-  app.get_formatter()
-      ->column_width(40);
-  CLI11_PARSE(app, argc, argv);
-  // END parse command line using CLI ----------------------------------------------
-#pragma endregion
-
-  // read input mesh
-  DGtal::Mesh<DGtal::Z3i::RealPoint> aMesh(true);
-  aMesh << inputFileName;
-
-#pragma region 1) Map creation
-  // HashMapVoxel mapVoxel(aDomain);
-  // HashMapV2F mapV2T;
+  // 1) Map creation
   HashMapVoxel mapVoxel;
-
-  // store voxels in the map:
-  std::vector<AccVoxel> voxelList = AccVoxelHelper::getAccVoxelsFromFile(extraDataName);
+  vector<AccVoxel> voxelList = AccVoxelHelper::getAccVoxelsFromFile(appMenu.extraData);
   for (auto &v : voxelList)
   {
     KeyType hashValue = AccVoxelHelper::hash(v.p);
     mapVoxel[hashValue] = v;
   }
-#pragma endregion
 
-  auto start = std::chrono::high_resolution_clock::now();
+  // 2) Cluster generation
+  Timer traverseTimer("traverseTimer");
+  traverseTimer.start();
 
-#pragma region 2) traverse the 3D space voxels
-
-  std::vector<std::vector<Uint>> globalCluster; // store the voxels hash value in each cluster
-
-  uint clusterLabel = 0;
-  if (outputMode == 2)
+  vector<vector<Uint>> globalCluster; // store voxel hash values for each cluster
+  Uint clusterLabel = 0;
+  if (appMenu.outputMode == 2)
   {
     // maintain all but selected the voxel with the highest confidence
-    cout << "NOTICE: Segment based on confidence(ratio): " << endl;
-    std::priority_queue<AccVoxel, std::vector<AccVoxel>, CompareConfsAsc> globalPQ;
-    computeConfidence(mapVoxel, theta);
-    processConfLabel(mapVoxel, globalPQ, clusterLabel, globalCluster, theta);
+    printMessage("Segment based on confidence(ratio): ", INFO);
+    priority_queue<AccVoxel, vector<AccVoxel>, CompareConfsAsc> globalPQ;
+    computeConfidence(mapVoxel, appMenu.theta);
+    processConfLabel(mapVoxel, globalPQ, clusterLabel, globalCluster, appMenu.theta);
   }
-  else if (outputMode == 1)
+  else if (appMenu.outputMode == 1)
   {
     // maintain all but selected the voxel with the highest votes
-    cout << "NOTICE: Segment based on accumulation(value): " << endl;
+    printMessage("Segment based on accumulation(value): ", INFO);
     // std::priority_queue<AccVoxel, std::vector<AccVoxel>, CompareAccAsc> globalPQ;
     std::priority_queue<AccVoxel> globalPQ;
     processAccLabel(mapVoxel, globalPQ, clusterLabel, globalCluster);
   }
   else
-  {
-    cout << "TODO: uncomplished functionality and stop the program." << endl;
-    // todo: output both
-  }
+    printMessage("Invalid Mode", ERROR);
 
-#pragma endregion
+  traverseTimer.stop();
+  traverseTimer.print();
 
-  auto end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> duration = end - start;
-  std::cout << "TIME: Compute clusters elapsed " << duration.count() << " seconds." << std::endl;
-
-#pragma region 3) color the Sequence Discrete Point(SDP) and faces
-
+  // 3) Shader faces associated SDP
   ofstream fout;
+  if (appMenu.outputSDP.empty())
+    appMenu.outputSDP = appMenu.extraData.substr(0, appMenu.extraData.length() - 4) + "_SDP.dat";
+  applyShaders(fout, appMenu.outputSDP, mapVoxel, aMesh, clusterLabel, appMenu.shaderMode);
+  printMessage("Export output in: " + appMenu.outputSDP, INFO);
 
-  if (outputSDPName.empty())
-    outputSDPName = extraDataName.substr(0, extraDataName.length() - 4) + "_SDP.dat";
-  fout.open(outputSDPName);
-  if (shaderMode == 0)
-  {
-    cout << "NOTICE: Colored with Gradient shader map." << endl;
-    outputGradientShader(fout, outputSDPName, mapVoxel, aMesh, clusterLabel);
-  }
-  else if (shaderMode == 1)
-  {
-    cout << "NOTICE: Colored with Hue shader map." << endl;
-    outputHueShader(fout, outputSDPName, mapVoxel, aMesh, clusterLabel);
-  }
-  else if (shaderMode == 2)
-  {
-    cout << "NOTICE: Colored with Random shader map1." << endl;
-    outputRandomShader(fout, outputSDPName, mapVoxel, aMesh, clusterLabel);
-  }
-
+  assignOutputName(appMenu);
+  fout.open(appMenu.outputMesh);
+  aMesh >> appMenu.outputMesh;
+  printMessage("Export output in: " + appMenu.outputMesh, INFO);
   fout.close();
-  cout << "NOTICE: Export output in: " << outputSDPName << endl;
-
-  if (outputMeshName.empty())
-  {
-    int inputSuffix = inputFileName.length() - 4; // .obj or .off
-    string filename = extraDataName.substr(0, extraDataName.length() - 4);
-    if (outputMode == 2)
-      outputMeshName = filename + "_ConfColored" + inputFileName.substr(inputSuffix);
-    else if (outputMode == 1)
-      outputMeshName = filename + "_AccColored" + inputFileName.substr(inputSuffix);
-    else
-    {
-      cout << "TODO: uncomplished functionality and stop the program." << endl;
-      // todo: output both
-      return 0;
-    }
-  }
-  fout.open(outputMeshName);
-  aMesh >> outputMeshName;
-  cout << "NOTICE: Export output in: " << outputMeshName << endl
-       << endl;
-  fout.close();
-
-#pragma endregion
 
   return 0;
 }
