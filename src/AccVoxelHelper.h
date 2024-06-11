@@ -18,7 +18,7 @@
 
 /// @brief Defined in AccVoxelHelper.h
 typedef size_t KeyType;
-#define HelperDebug
+// #define HelperDebug
 
 struct
     CompareAccAsc

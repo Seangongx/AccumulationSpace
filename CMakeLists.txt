@@ -10,12 +10,16 @@ endif()
 # Require C++17 standard in DGtal
 set(CMAKE_CXX_STANDARD 17)  
 
-SET(AS_SOURCE_FILE 
+SET(AS_COMMAND_SRC 
     ${PROJECT_SOURCE_DIR}/src/NormalAccumulator.cpp
+)
+SET(AS_TOOLS_SRC 
+    ${PROJECT_SOURCE_DIR}/src/AccVoxelHelper.h
 )
 
 # Include DGtal
-FIND_PACKAGE(DGtal REQUIRED) #old version installed in machine
+SET (DGtal_DIR "/home/adam/DGtal/build")
+find_package(DGtal REQUIRED) #local version installed in machine
 #include_directories(${DGTAL_INCLUDE_DIRS})
 #link_libraries(${DGTAL_LIBRARY_DIRS})
 

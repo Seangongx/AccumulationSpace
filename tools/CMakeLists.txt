@@ -8,7 +8,7 @@ SET (AS_TOOLS
 )
 
 FOREACH(FILE ${AS_COMMANDS})
-  add_executable(${FILE} ${FILE}.cpp ${AS_SOURCE_FILE})
+  add_executable(${FILE} ${FILE}.cpp ${AS_COMMAND_SRC})
   target_link_libraries(${FILE} ${DGTAL_LIBRARIES})
   target_include_directories(${FILE}
   PUBLIC
@@ -17,7 +17,7 @@ FOREACH(FILE ${AS_COMMANDS})
 ENDFOREACH(FILE)
 
 FOREACH(FILE ${AS_TOOLS})
-  add_executable(${FILE} ${FILE})
+  add_executable(${FILE} ${FILE}.cpp ${AS_TOOLS_SRC})
   target_include_directories(${FILE}
   PUBLIC
     ${PROJECT_SOURCE_DIR}/src

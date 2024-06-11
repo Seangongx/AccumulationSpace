@@ -139,7 +139,7 @@ typedef DGtal::Z3i::Point Point3D; // Interger 3D point ( Z3i )
 typedef DGtal::PointVector<1, DGtal::int32_t> Point1D;
 typedef DGtal::Mesh<DGtal::Z3i::RealPoint> RealMesh;
 // STD definiations
-typedef map<Uint, AccVoxel> HashMapVoxel; // Map id to voxel
+typedef map<Uint, AccVoxel> HashMapVoxel; // id mapping to voxels
 typedef priority_queue<int, vector<int>, CompareConfsAsc> Test;
 
 #pragma endregion
