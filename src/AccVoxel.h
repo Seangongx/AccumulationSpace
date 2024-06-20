@@ -52,7 +52,7 @@ public:
 class FaceMap
 {
 private:
-  std::unordered_map<size_t, std::set<size_t>> data; // mapping index to hashValue of voxels
+  std::unordered_map<size_t, std::set<size_t>> data; // mapping face index to hashValue of voxels
   std::ofstream logFile;                             // log file stream
   std::string logFileName{"faceMapLog.txt"};         // log file name
 
