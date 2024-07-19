@@ -37,8 +37,11 @@
 #include "DGtal/io/writers/MeshWriter.h"
 #include <iostream>
 
+#include "glm/fwd.hpp"
+#include "imgui.h"
 #include "polyscope/pick.h"
 #include "polyscope/point_cloud.h"
+#include "polyscope/point_cloud.ipp"
 #include "polyscope/polyscope.h"
 #include "polyscope/surface_mesh.h"
 
@@ -93,6 +96,7 @@ using namespace DGtal;
  */
 
 typedef PolygonalSurface<Z3i::RealPoint> PolySurface;
+typedef vector<glm::vec3> PolyVoxels;
 
 static PolySurface currentPolysurf;
 static PolySurface firstPolysurf;
@@ -123,8 +127,8 @@ static bool accBtnPressed5 = false;
 
 // global maintain data
 static vector<AccVoxel> voxelList;
-static vector<glm::vec3> points;
-static vector<glm::vec3> selectPoint;
+static PolyVoxels primaryVoxels;
+static PolyVoxels selectingVoxels;
 
 static size_t clickCount = 0;
 
@@ -152,9 +156,9 @@ void initFacesMap() {
 }
 
 void clearPoints() {
-  if (!points.empty()) {
+  if (!primaryVoxels.empty()) {
     vector<glm::vec3> temp;
-    points.swap(temp);
+    primaryVoxels.swap(temp);
   }
 }
 
@@ -174,20 +178,17 @@ std::vector<glm::vec3> getPointsFromVoxelist(std::vector<AccVoxel>& voxelList) {
   return points;
 }
 
-void addPointCloudInPolyscope() {
-  polyscope::removeStructure("InputAcc");
-  std::vector<glm::vec3> points;
-
-  polyscope::PointCloud* psCloud = polyscope::registerPointCloud("InputPoints", points);
-  // structureTypes["InputPoints"] = POINTCLOUD;
-
+void addPointCloudInPolyscopeFrom(string structName, PolyVoxels structPoints, double structRadius,
+                                  glm::vec3 structColor) {
+  polyscope::PointCloud* psCloud = polyscope::registerPointCloud(structName, structPoints);
   // set some options
-  psCloud->setPointRadius(0.02);
+  psCloud->setPointRadius(structRadius);
+  psCloud->setPointColor(structColor);
   psCloud->setPointRenderMode(polyscope::PointRenderMode::Quad);
+  // structureTypes["InputPoints"] = POINTCLOUD;
 }
 
 void addSurfaceInPolyscope(PolySurface& psurf) {
-  polyscope::removeStructure("InputMesh");
   std::vector<std::vector<std::size_t>> faces;
   vectSelection.clear();
   for (auto& face : psurf.allFaces()) {
@@ -196,7 +197,6 @@ void addSurfaceInPolyscope(PolySurface& psurf) {
   }
   auto digsurf = polyscope::registerSurfaceMesh("InputMesh", psurf.positions(), faces);
 
-  // structureTypes["InputMesh"] = MESH;
   digsurf->setTransparency(0.6);
   updateSelection();
 }
@@ -335,7 +335,6 @@ void imguiIOSettings(ImGuiIO& io) {
 }
 
 void mouseSelectFaces(ImGuiIO& io) {
-  auto digsurf = polyscope::getSurfaceMesh("InputMesh");
   if (io.MouseDoubleClicked[0]) {
     unsigned long indexSelect = polyscope::pick::getSelection().second;
     unsigned long nb = 0;
@@ -366,11 +365,11 @@ void mouseSelectFaces(ImGuiIO& io) {
 
 void mouseSelectFaceAssociateElements(ImGuiIO& io) {
 
-  auto digsurf = polyscope::getSurfaceMesh("InputMesh");
-  if (io.MouseClicked[0]) {
+  // auto digsurf = polyscope::getSurfaceMesh("InputMesh");
+  // if (digsurf == nullptr) return;
 
-    std::pair<polyscope::Structure*, size_t> selection = polyscope::pick::getSelection();
-
+  std::pair<polyscope::Structure*, size_t> selection = polyscope::pick::getSelection();
+  if (polyscope::pick::haveSelection()) {
     size_t nb = 0;
     // face selected
     if (selection.first == nullptr) {
@@ -389,7 +388,7 @@ void mouseSelectFaceAssociateElements(ImGuiIO& io) {
         promptText = "[Surface Mesh]Selected Vertex: " + to_string(faceSelectedId);
       } else if (faceSelectedId < edgePickIndStart) {
         (faceSelectedId -= facePickIndStart);
-        promptText = "[Surface Mesh]Selected face: " + to_string(faceSelectedId);
+        promptText = "[Surface Mesh]Selected Face: " + to_string(faceSelectedId);
       } else {
         promptText = "[Surface Mesh]Selected unknown element: " + to_string(faceSelectedId);
       }
@@ -424,8 +423,18 @@ void mouseSelectFaceAssociateElements(ImGuiIO& io) {
       } */
 }
 
+// Get a structure map
+std::map<std::string, std::unique_ptr<polyscope::Structure>>& getStructureMapCreateIfNeeded(std::string typeName) {
+  if (polyscope::state::structures.find(typeName) == polyscope::state::structures.end()) {
+    polyscope::state::structures[typeName] = std::map<std::string, std::unique_ptr<polyscope::Structure>>();
+  }
+  return polyscope::state::structures[typeName];
+}
+
+
 void mouseEventCallback(ImGuiIO& io) {
   // mouseSelectFaces(io);
+
   mouseSelectFaceAssociateElements(io);
 }
 
@@ -487,70 +496,67 @@ void imguiPanelSettings() {
 
   // add accumulation operations
   ImGui::Separator();
-  ImGui::Text("Accumulation operation");
-  if (ImGui::Button(accBtnPressed0 ? "Show mesh" : "Disable mesh")) {
+  ImGui::Text("Objects manipulation");
+  // first line
+  if (ImGui::Button(accBtnPressed0 ? "Show mesh" : "Hide mesh")) {
     // TODO: make mesh invisiable to mouse selection (new mouse event)
     if (accBtnPressed0) {
+      addSurfaceInPolyscope(firstPolysurf);
       accBtnPressed0 = false;
     } else {
+      auto& list = getStructureMapCreateIfNeeded("SurfaceMesh");
+      for (auto& s : list) {
+        cout << s.first << " is " << s.second->typeName() << endl;
+      }
+      polyscope::removeStructure("InputMesh");
       accBtnPressed0 = true;
     }
   }
   ImGui::SameLine();
-
-  if (ImGui::Button("show accumulation")) {
-    // TODO: load file and show all accumulations at once
-
-    accBtnPressed1 = true;
-  } else {
-
-    accBtnPressed1 = true;
+  if (ImGui::Button(accBtnPressed1 ? "Show accumulations" : "Hide accumulations")) {
+    if (accBtnPressed1) {
+      addPointCloudInPolyscopeFrom("Primary Voxels", primaryVoxels, 0.01, glm::vec3(1.0f, 1.0f, 1.0f));
+      accBtnPressed1 = false;
+    } else {
+      polyscope::removePointCloud("Primary Voxels");
+      accBtnPressed1 = true;
+    }
   }
-
-  if (ImGui::Button("show acc and faces")) {
+  // second line
+  if (ImGui::Button(accBtnPressed2 ? "Hide asscociated accumulations" : "Show asscociated accumulations")) {
+    // TODO:
     // check face selected
     // currentCachedPointCloud(accumulation voxel) Update
-    accBtnPressed1 = true;
+    accBtnPressed2 = false;
   } else {
-    accBtnPressed1 = false;
+    accBtnPressed2 = true;
   }
   ImGui::SameLine();
-  if (ImGui::Button("show incident ray")) {
+  if (ImGui::Button(accBtnPressed3 ? "Hide voting faces" : "Show voting faces")) {
+    // TODO: load file and show all accumulations at once
+    accBtnPressed3 = false;
+  } else {
+    accBtnPressed3 = true;
+  }
+  // thrid line
+  if (ImGui::Button(accBtnPressed4 ? "Hide incident ray" : "Show incident ray")) {
     // check face selected
     // currentCachedPointCloud(accumulation voxel) updace
-    accBtnPressed2 = true;
+    accBtnPressed4 = false;
   } else {
-    accBtnPressed2 = false;
+    accBtnPressed4 = true;
   }
   ImGui::SameLine();
   if (ImGui::Button("show associated faces")) {
     // check if exists one selected voxel
     // currentCachedDisplayFaces updated
-    accBtnPressed3 = true;
+    accBtnPressed5 = false;
   } else {
 
-    accBtnPressed3 = false;
-  }
-  if (ImGui::Button(accBtnPressed4 ? "Delete points" : "Load points")) {
-    if (accBtnPressed4) {
-      // TODO: remove selected point cloud
-      // ...
-      //
-      // remove fixed point cloud,
-      polyscope::removePointCloud("accumulation points");
-      accBtnPressed4 = false;
-    } else {
-      // TODO: assign selected point cloud
-      // ...
-      //
-      polyscope::PointCloud* psCloud = polyscope::registerPointCloud("accumulation points", points);
-      psCloud->setPointRadius(0.01);
-      psCloud->setPointColor(glm::vec3(1.0f, 0.0f, 0.0f));
-      psCloud->setPointRenderMode(polyscope::PointRenderMode::Quad);
-      accBtnPressed4 = true;
-    }
+    accBtnPressed5 = true;
   }
 }
+
 
 void callbackFaceID() {
   imguiStartSettings();
@@ -562,7 +568,7 @@ void callbackFaceID() {
   mouseEventCallback(io);
 
   imguiEndSettings();
-  updateSelection();
+  // updateSelection();
 }
 
 int main(int argc, char** argv) {
@@ -586,7 +592,7 @@ int main(int argc, char** argv) {
   CLI11_PARSE(app, argc, argv);
 
   // build visualization interface
-  polyscope::options::programName = "PolyMeshEdit - (DGtalToolsContrib)";
+  polyscope::options::programName = "PolyMeshEdit - (DGtalToolsContrib) " + Timer::now();
   polyscope::init();
   polyscope::options::buildGui = false;
 
@@ -614,12 +620,11 @@ int main(int argc, char** argv) {
 
   // pointCloud structure
   voxelList = AccVoxelHelper::getAccVoxelsFromFile(inputAccName);
-  points = getPointsFromVoxelist(voxelList);
+  primaryVoxels = getPointsFromVoxelist(voxelList);
+  addPointCloudInPolyscopeFrom("Primary Voxels", primaryVoxels, 0.008, glm::vec3(1.0f, 1.0f, 1.0f));
   initFacesMap();
 
   polyscope::show();
-
-  cout << "new version" << std::endl;
 
   return 0;
 }
