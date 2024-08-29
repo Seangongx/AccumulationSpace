@@ -34,8 +34,8 @@
 #include "DGtal/helpers/ShortcutsGeometry.h"
 #include "DGtal/helpers/StdDefs.h"
 #include "DGtal/io/readers/MeshReader.h"
-#include "DGtal/io/writers/MeshWriter.h"
 #include <iostream>
+#include <string>
 
 #include "glm/fwd.hpp"
 #include "imgui.h"
@@ -43,13 +43,13 @@
 #include "polyscope/point_cloud.h"
 #include "polyscope/point_cloud.ipp"
 #include "polyscope/polyscope.h"
+#include "polyscope/render/color_maps.h"
 #include "polyscope/surface_mesh.h"
 
 #include "AccVoxel.h"
 #include "AccVoxelHelper.h"
 
 #include "CLI11.hpp"
-#include "Menu.h"
 #include "Timer.h"
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -131,6 +131,8 @@ static PolyVoxels primaryVoxels;
 static PolyVoxels selectingVoxels;
 
 static size_t clickCount = 0;
+std::array<KeyType, 2> globalAccMaxMin;
+std::vector<double> accmulationScalarValues;
 
 // structure type
 // enum STRUCTURETYPE { MESH, POINTCLOUD };
@@ -178,13 +180,36 @@ std::vector<glm::vec3> getPointsFromVoxelist(std::vector<AccVoxel>& voxelList) {
   return points;
 }
 
+// Visualize accumulation set in space
 void addPointCloudInPolyscopeFrom(string structName, PolyVoxels structPoints, double structRadius,
                                   glm::vec3 structColor) {
+
   polyscope::PointCloud* psCloud = polyscope::registerPointCloud(structName, structPoints);
-  // set some options
+  // set point radius
   psCloud->setPointRadius(structRadius);
-  psCloud->setPointColor(structColor);
+  // set accmuluation as  scalar quantity)
+  accmulationScalarValues.resize(voxelList.size());
+  for (size_t i = 0; i < structPoints.size(); i++) {
+    accmulationScalarValues[i] = voxelList[i].votes;
+  }
+  // use turbo color map (default)
+  std::vector<double> xC(structPoints.size());
+  for (size_t i = 0; i < structPoints.size(); i++) {
+    xC[i] = accmulationScalarValues[i];
+  }
+  psCloud->addScalarQuantity("xC", xC)->setColorMap("turbo")->setEnabled(true);
   psCloud->setPointRenderMode(polyscope::PointRenderMode::Quad);
+
+  {
+    // Random color map (color quantity)
+    // std::vector<std::array<double, 3>> randColor(structPoints.size());
+    // for (size_t i = 0; i < structPoints.size(); i++) {
+    //   randColor[i] = {{polyscope::randomUnit(), polyscope::randomUnit(), polyscope::randomUnit()}};
+    // }
+    // psCloud->addColorQuantity("random color", randColor)->setEnabled(true);
+
+    // polyscope::loadColorMap("sampleColorMap", "/home/adam/Desktop/AccumulationSpace/samples/sample_colormap.png");
+  }
   // structureTypes["InputPoints"] = POINTCLOUD;
 }
 
@@ -619,7 +644,7 @@ int main(int argc, char** argv) {
   firstPolysurf = currentPolysurf;
 
   // pointCloud structure
-  voxelList = AccVoxelHelper::getAccVoxelsFromFile(inputAccName);
+  voxelList = AccVoxelHelper::getAccVoxelsFromFile(inputAccName, globalAccMaxMin);
   primaryVoxels = getPointsFromVoxelist(voxelList);
   addPointCloudInPolyscopeFrom("Primary Voxels", primaryVoxels, 0.008, glm::vec3(1.0f, 1.0f, 1.0f));
   initFacesMap();
