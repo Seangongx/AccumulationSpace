@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #if defined(AccVoxelHelper_RECURSES)
 #error Recursive header files inclusion detected in AccVoxelHelper.h
 #else // defined(AccVoxelHelper_RECURSES)
@@ -10,17 +11,13 @@
 /** Prevents repeated inclusion of headers. */
 #define AccVoxelHelper_h
 
-#include "DGtal/base/Common.h"
-#include "DGtal/helpers/StdDefs.h"
-#include "DGtal/io/readers/PointListReader.h"
-#include <array>
-#include <limits>
-
 #include "AccVoxel.h"
+#include "DGtal/io/readers/PointListReader.h"
 
 /// @brief Defined in AccVoxelHelper.h
 typedef size_t KeyType;
-// #define HelperDebug
+typedef DGtal::PointVector<1, DGtal::int32_t> Point1D;
+// #define HelperDebugInfo
 
 struct CompareAccAsc {
   bool operator()(const AccVoxel& e1, const AccVoxel& e2) const { return e1.votes < e2.votes; }
@@ -36,35 +33,24 @@ public:
   /// @brief Warning: using old version of DGtal may read 1 more repeated last face index
   /// @param filename
   /// @return
-  static std::vector<AccVoxel> getAccVoxelsFromFile(std::string filename, std::array<KeyType, 2>& AccMinMax) {
-    typedef DGtal::PointVector<1, DGtal::int32_t> Point1D;
+  static std::vector<AccVoxel> getAccVoxelsFromFile(std::string filename) {
+
     std::vector<AccVoxel> resVectAcc;
-    std::vector<unsigned int> indexFace;
+    std::vector<DGtal::uint32_t> indexFace;
     auto vOrigins = DGtal::PointListReader<Point1D>::getPolygonsFromFile(filename);
-    AccMinMax = {std::numeric_limits<KeyType>::max(), std::numeric_limits<KeyType>::min()};
 
     for (auto l : vOrigins) {
       if (l.size() > 4) {
-        AccVoxel::Point3D pt(l[0][0], l[1][0], l[2][0]);
-        AccVoxel accV(pt, l[3][0], l[4][0], 0, false);
-
-        // l.size()-1 to remove the repeated last index in old version of DGtal
+        AccVoxel accV({l[0][0], l[1][0], l[2][0]}, l[3][0], l[4][0], 0, false);
+        //  l.size()-1 to remove the repeated last index in old version of DGtal
         for (unsigned int i = 5; i < l.size(); i++) {
           accV.faces.push_back(l[i][0]);
         }
-        resVectAcc.push_back(accV);
-
-        if (accV.votes < AccMinMax[0]) {
-          AccMinMax[0] = accV.votes;
-        } else {
-          if (accV.votes > AccMinMax[1]) {
-            AccMinMax[1] = accV.votes;
-          }
-        }
+        resVectAcc.push_back(std::move(accV));
 
 
-#ifdef HelperDebug
-        std::cout << std::endl;
+#ifdef HelperDebugInfo
+        std::cout << "<HelperDebugInfo>" std::endl;
         std::cout << "P:" << accV.p << " | ";
         std::cout << "votes:" << accV.votes << " ";
         std::cout << "confs:" << accV.confs << " -> ";
@@ -80,7 +66,7 @@ public:
   }
 
   /// @brief A function to hash a point
-  static KeyType hash(AccVoxel::Point3D p) { return std::hash<AccVoxel::Point3D>{}(p); }
+  static KeyType accumulationHash(AccVoxel::Point3D p) { return std::hash<AccVoxel::Point3D>{}(p); }
 };
 
 #endif // !defined AccVoxelHelper_h

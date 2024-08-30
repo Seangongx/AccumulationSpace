@@ -43,7 +43,6 @@
 #include "polyscope/point_cloud.h"
 #include "polyscope/point_cloud.ipp"
 #include "polyscope/polyscope.h"
-#include "polyscope/render/color_maps.h"
 #include "polyscope/surface_mesh.h"
 
 #include "AccVoxel.h"
@@ -96,7 +95,8 @@ using namespace DGtal;
  */
 
 typedef PolygonalSurface<Z3i::RealPoint> PolySurface;
-typedef vector<glm::vec3> PolyVoxels;
+typedef glm::vec3 PolyPoint;
+typedef vector<PolyPoint> PointLists;
 
 static PolySurface currentPolysurf;
 static PolySurface firstPolysurf;
@@ -127,8 +127,8 @@ static bool accBtnPressed5 = false;
 
 // global maintain data
 static vector<AccVoxel> voxelList;
-static PolyVoxels primaryVoxels;
-static PolyVoxels selectingVoxels;
+static PointLists primaryVoxels;
+static PointLists selectingVoxels;
 
 static size_t clickCount = 0;
 std::array<KeyType, 2> globalAccMaxMin;
@@ -151,7 +151,7 @@ void initFacesMap() {
       size_t faceID = id;
 
       // need to test the coherence with voxelmap
-      faceMapVoxel.addValue(id, AccVoxelHelper::hash(v.p));
+      faceMapVoxel.addValue(id, AccVoxelHelper::accumulationHash(v.p));
     }
   }
   faceMapVoxel.print();
@@ -172,6 +172,7 @@ void updateSelection() {
   digsurf->setAllQuantitiesEnabled(true);
 }
 
+// Polyscope use glm::vec3 as point type
 std::vector<glm::vec3> getPointsFromVoxelist(std::vector<AccVoxel>& voxelList) {
   std::vector<glm::vec3> points;
   for (AccVoxel v : voxelList) {
@@ -181,11 +182,10 @@ std::vector<glm::vec3> getPointsFromVoxelist(std::vector<AccVoxel>& voxelList) {
 }
 
 // Visualize accumulation set in space
-void addPointCloudInPolyscopeFrom(string structName, PolyVoxels structPoints, double structRadius,
+void addPointCloudInPolyscopeFrom(string structName, PointLists structPoints, double structRadius,
                                   glm::vec3 structColor) {
 
   polyscope::PointCloud* psCloud = polyscope::registerPointCloud(structName, structPoints);
-  // set point radius
   psCloud->setPointRadius(structRadius);
   // set accmuluation as  scalar quantity)
   accmulationScalarValues.resize(voxelList.size());
@@ -193,11 +193,11 @@ void addPointCloudInPolyscopeFrom(string structName, PolyVoxels structPoints, do
     accmulationScalarValues[i] = voxelList[i].votes;
   }
   // use turbo color map (default)
-  std::vector<double> xC(structPoints.size());
+  std::vector<double> accumulationQuantity(structPoints.size());
   for (size_t i = 0; i < structPoints.size(); i++) {
-    xC[i] = accmulationScalarValues[i];
+    accumulationQuantity[i] = accmulationScalarValues[i];
   }
-  psCloud->addScalarQuantity("xC", xC)->setColorMap("turbo")->setEnabled(true);
+  psCloud->addScalarQuantity("accumulationQuantity", accumulationQuantity)->setColorMap("turbo")->setEnabled(true);
   psCloud->setPointRenderMode(polyscope::PointRenderMode::Quad);
 
   {
@@ -344,17 +344,17 @@ void deleteSelectedFaces() {
   addSurfaceInPolyscope(newSur);
 }
 
-void imguiStartSettings() {
+void setImguiBegin() {
   srand((unsigned)time(NULL));
   ImGui::Begin("Editing tools");
 }
 
-void imguiEndSettings() {
+void setImguiEnd() {
   ImGui::Text("%s", promptText.c_str());
   ImGui::End();
 }
 
-void imguiIOSettings(ImGuiIO& io) {
+void setImguiIO(ImGuiIO& io) {
   float dpiScale = 1.8f; // DPI ratio
   io.FontGlobalScale = dpiScale;
 }
@@ -458,15 +458,13 @@ std::map<std::string, std::unique_ptr<polyscope::Structure>>& getStructureMapCre
 
 
 void mouseEventCallback(ImGuiIO& io) {
-  // mouseSelectFaces(io);
-
+  // mouseSelectFaces(io)
   mouseSelectFaceAssociateElements(io);
 }
 
-void imguiPanelSettings() {
-  // panel settings
+void setImguiCustomPanel() {
+  // panel settings (spacing and inner margins)
   ImGuiStyle& style = ImGui::GetStyle();
-  // 设置面板的间距和内边距
   style.WindowPadding = ImVec2(10, 10);
   style.FramePadding = ImVec2(5, 5);
   style.ItemSpacing = ImVec2(10, 10);
@@ -584,19 +582,20 @@ void imguiPanelSettings() {
 
 
 void callbackFaceID() {
-  imguiStartSettings();
-  imguiPanelSettings();
+  setImguiBegin();
+  setImguiCustomPanel();
   // io
   ImGuiIO& io = ImGui::GetIO();
 
-  imguiIOSettings(io);
+  setImguiIO(io);
   mouseEventCallback(io);
 
-  imguiEndSettings();
+  setImguiEnd();
   // updateSelection();
 }
 
 int main(int argc, char** argv) {
+
   std::string inputFileName{""};
   std::string inputAccName{""};
 
@@ -619,7 +618,9 @@ int main(int argc, char** argv) {
   // build visualization interface
   polyscope::options::programName = "PolyMeshEdit - (DGtalToolsContrib) " + Timer::now();
   polyscope::init();
-  polyscope::options::buildGui = false;
+  // polyscope::view::windowWidth = 1024;
+  // polyscope::view::windowHeight = 768;
+  polyscope::options::buildGui = true;
 
   // ImGui::SetWindowFontScale(2.0f);
 
@@ -644,7 +645,7 @@ int main(int argc, char** argv) {
   firstPolysurf = currentPolysurf;
 
   // pointCloud structure
-  voxelList = AccVoxelHelper::getAccVoxelsFromFile(inputAccName, globalAccMaxMin);
+  voxelList = AccVoxelHelper::getAccVoxelsFromFile(inputAccName);
   primaryVoxels = getPointsFromVoxelist(voxelList);
   addPointCloudInPolyscopeFrom("Primary Voxels", primaryVoxels, 0.008, glm::vec3(1.0f, 1.0f, 1.0f));
   initFacesMap();
