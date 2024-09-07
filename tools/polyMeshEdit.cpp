@@ -129,10 +129,12 @@ static bool accBtnPressed5 = false;
 static vector<AccVoxel> voxelList;
 static PointLists primaryVoxels;
 static PointLists selectingVoxels;
-
-static size_t clickCount = 0;
-std::array<KeyType, 2> globalAccMaxMin;
 std::vector<double> accmulationScalarValues;
+std::vector<glm::vec3> currentfacesColor;
+// global selection data
+static size_t clickCount = 0;
+static size_t selectedElementId = 0;
+std::vector<size_t> selectedAssociatedFacesList;
 
 // structure type
 // enum STRUCTURETYPE { MESH, POINTCLOUD };
@@ -194,10 +196,15 @@ void addPointCloudInPolyscopeFrom(string structName, PointLists structPoints, do
   }
   // use turbo color map (default)
   std::vector<double> accumulationQuantity(structPoints.size());
+  std::vector<double> accumulationTransparency(structPoints.size());
   for (size_t i = 0; i < structPoints.size(); i++) {
     accumulationQuantity[i] = accmulationScalarValues[i];
+    accumulationTransparency[i] = 0.5;
   }
   psCloud->addScalarQuantity("accumulationQuantity", accumulationQuantity)->setColorMap("turbo")->setEnabled(true);
+  auto q2 = psCloud->addScalarQuantity("accumulationTransparency", accumulationTransparency);
+  psCloud->setTransparencyQuantity(q2);
+  // psCloud->setTransparency(0.8);
   psCloud->setPointRenderMode(polyscope::PointRenderMode::Quad);
 
   {
@@ -222,8 +229,10 @@ void addSurfaceInPolyscope(PolySurface& psurf) {
   }
   auto digsurf = polyscope::registerSurfaceMesh("InputMesh", psurf.positions(), faces);
 
-  digsurf->setTransparency(0.6);
-  updateSelection();
+  std::vector<glm::vec3> defaultColor(digsurf->nFaces(), glm::vec3(0.8f, 0.8f, 0.8f));
+  digsurf->addFaceColorQuantity("Face Colors", defaultColor)->setEnabled(true);
+  digsurf->setTransparency(0.4)->setEnabled(true);
+  // updateSelection();
 }
 
 static Z3i::RealPoint getFaceBarycenter(const PolySurface& polysurff, const PolySurface::Face& aFace) {
@@ -359,41 +368,40 @@ void setImguiIO(ImGuiIO& io) {
   io.FontGlobalScale = dpiScale;
 }
 
-void mouseSelectFaces(ImGuiIO& io) {
-  if (io.MouseDoubleClicked[0]) {
-    unsigned long indexSelect = polyscope::pick::getSelection().second;
-    unsigned long nb = 0;
-    // face selected
-    if (indexSelect >= currentPolysurf.nbVertices()) {
-      nb = (unsigned long)polyscope::pick::getSelection().second - currentPolysurf.nbVertices();
-    } else {
-      // vertex selected (selecting a face connected to it)
-      if (currentPolysurf.facesAroundVertex(polyscope::pick::getSelection().second).size() > 0) {
-        nb = currentPolysurf.facesAroundVertex(polyscope::pick::getSelection().second)[0];
-      }
-    }
 
-    if (nb > 0 && nb < vectSelection.size()) {
-      auto fVois = faceAround(currentPolysurf, nb, paintRad);
-      vectSelection[nb] = cursorFlag;
-      srand((unsigned)time(NULL));
-      for (auto f : fVois) {
-        if (rand() % partialF == 0) {
-          vectSelection[f] = selectFlag;
-        } else {
-          vectSelection[f] = unselectFlag;
-        }
-      }
-    }
-  }
-}
+// void mouseSelectFaces(ImGuiIO& io) {
+//   if (io.MouseDoubleClicked[0]) {
+//     unsigned long indexSelect = polyscope::pick::getSelection().second;
+//     unsigned long nb = 0;
+//     // face selected
+//     if (indexSelect >= currentPolysurf.nbVertices()) {
+//       nb = (unsigned long)polyscope::pick::getSelection().second - currentPolysurf.nbVertices();
+//     } else {
+//       // vertex selected (selecting a face connected to it)
+//       if (currentPolysurf.facesAroundVertex(polyscope::pick::getSelection().second).size() > 0) {
+//         nb = currentPolysurf.facesAroundVertex(polyscope::pick::getSelection().second)[0];
+//       }
+//     }
 
-void mouseSelectFaceAssociateElements(ImGuiIO& io) {
+//     if (nb > 0 && nb < vectSelection.size()) {
+//       auto fVois = faceAround(currentPolysurf, nb, paintRad);
+//       vectSelection[nb] = cursorFlag;
+//       srand((unsigned)time(NULL));
+//       for (auto f : fVois) {
+//         if (rand() % partialF == 0) {
+//           vectSelection[f] = selectFlag;
+//         } else {
+//           vectSelection[f] = unselectFlag;
+//         }
+//       }
+//     }
+//   }
+// }
 
-  // auto digsurf = polyscope::getSurfaceMesh("InputMesh");
-  // if (digsurf == nullptr) return;
+void mouseSelectIndexTest(ImGuiIO& io) {
 
   std::pair<polyscope::Structure*, size_t> selection = polyscope::pick::getSelection();
+
   if (polyscope::pick::haveSelection()) {
     size_t nb = 0;
     // face selected
@@ -418,11 +426,11 @@ void mouseSelectFaceAssociateElements(ImGuiIO& io) {
         promptText = "[Surface Mesh]Selected unknown element: " + to_string(faceSelectedId);
       }
     }
-    if (selection.first->typeName() == "Point Cloud") {
+    // if (selection.first->typeName() == "Point Cloud") {
 
-      voxelSelectedId = selection.second;
-      promptText = "[Point Cloud]Selected Accumulation: " + to_string(voxelSelectedId);
-    }
+    //   voxelSelectedId = selection.second;
+    //   promptText = "[Point Cloud]Selected Accumulation: " + to_string(voxelSelectedId);
+    // }
     /*     else {
           promptText = "what happen?";
         } */
@@ -448,6 +456,66 @@ void mouseSelectFaceAssociateElements(ImGuiIO& io) {
       } */
 }
 
+
+void storeAllAssociatedFacesInList() {
+  auto voxelId = selectedElementId;
+  if (voxelId < 0) {
+    return;
+  }
+  for (auto f : voxelList[voxelId].faces) {
+    selectedAssociatedFacesList.push_back(f);
+  }
+}
+
+void colorAllAssociatedFaces() {
+  // find all associated faces[DGtal face Id] on polyscope mesh
+  auto digsurf = polyscope::getSurfaceMesh("InputMesh");
+  if (digsurf == nullptr) {
+    return;
+  }
+
+  currentfacesColor.resize(digsurf->nFaces(), digsurf->getSurfaceColor());
+  // cout << "currentfacesColor: " << digsurf->getSurfaceColor() << endl;
+  for (auto f : selectedAssociatedFacesList) {
+    currentfacesColor[f] = glm::vec3(1.0, 0.0, 0.0);
+  }
+  // digsurf->setTransparency(0.6);
+  digsurf->addFaceColorQuantity("associated faces color", currentfacesColor);
+}
+
+void mouseSelectAccumulation(ImGuiIO& io) {
+  // polyscope default left-click selection
+  if (polyscope::pick::haveSelection()) {
+    std::pair<polyscope::Structure*, size_t> selection = polyscope::pick::getSelection();
+    size_t nb = 0;
+    // if (io.MouseClicked[0]) {
+    //   // if double clicked an accumulation voxel
+    //   if (selection.first->typeName() == "Point Cloud") {
+    //     nb = selection.second;
+    //     if (nb >= 0) {
+    //       clickCount++;
+    //       promptText = "[Click Accumulation]: " + to_string(nb);
+    //     }
+    //   }
+    // }
+    if (io.MouseDoubleClicked[0]) {
+      // if double clicked an accumulation voxel
+      if (selection.first->typeName() == "Point Cloud") {
+        nb = selection.second;
+        if (nb >= 0) {
+          clickCount++;
+          promptText = "[Double click Accumulation]: " + to_string(nb);
+          selectedElementId = nb;
+        }
+
+        storeAllAssociatedFacesInList();
+        colorAllAssociatedFaces();
+      }
+    }
+  }
+}
+
+
 // Get a structure map
 std::map<std::string, std::unique_ptr<polyscope::Structure>>& getStructureMapCreateIfNeeded(std::string typeName) {
   if (polyscope::state::structures.find(typeName) == polyscope::state::structures.end()) {
@@ -458,8 +526,10 @@ std::map<std::string, std::unique_ptr<polyscope::Structure>>& getStructureMapCre
 
 
 void mouseEventCallback(ImGuiIO& io) {
+
   // mouseSelectFaces(io)
-  mouseSelectFaceAssociateElements(io);
+  mouseSelectIndexTest(io);
+  mouseSelectAccumulation(io);
 }
 
 void setImguiCustomPanel() {
@@ -520,32 +590,7 @@ void setImguiCustomPanel() {
   // add accumulation operations
   ImGui::Separator();
   ImGui::Text("Objects manipulation");
-  // first line
-  if (ImGui::Button(accBtnPressed0 ? "Show mesh" : "Hide mesh")) {
-    // TODO: make mesh invisiable to mouse selection (new mouse event)
-    if (accBtnPressed0) {
-      addSurfaceInPolyscope(firstPolysurf);
-      accBtnPressed0 = false;
-    } else {
-      auto& list = getStructureMapCreateIfNeeded("SurfaceMesh");
-      for (auto& s : list) {
-        cout << s.first << " is " << s.second->typeName() << endl;
-      }
-      polyscope::removeStructure("InputMesh");
-      accBtnPressed0 = true;
-    }
-  }
-  ImGui::SameLine();
-  if (ImGui::Button(accBtnPressed1 ? "Show accumulations" : "Hide accumulations")) {
-    if (accBtnPressed1) {
-      addPointCloudInPolyscopeFrom("Primary Voxels", primaryVoxels, 0.01, glm::vec3(1.0f, 1.0f, 1.0f));
-      accBtnPressed1 = false;
-    } else {
-      polyscope::removePointCloud("Primary Voxels");
-      accBtnPressed1 = true;
-    }
-  }
-  // second line
+
   if (ImGui::Button(accBtnPressed2 ? "Hide asscociated accumulations" : "Show asscociated accumulations")) {
     // TODO:
     // check face selected
