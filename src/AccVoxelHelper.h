@@ -33,22 +33,19 @@ public:
   /// @brief Warning: using old version of DGtal may read 1 more repeated last face index
   /// @param filename
   /// @return
-  static std::vector<AccVoxel> getAccVoxelsFromFile(std::string filename) {
-
+  static std::vector<AccVoxel> getAccVoxelsFromFile(const std::string& filename) {
     std::vector<AccVoxel> resVectAcc;
     std::vector<DGtal::uint32_t> indexFace;
     auto vOrigins = DGtal::PointListReader<Point1D>::getPolygonsFromFile(filename);
 
     for (auto l : vOrigins) {
       if (l.size() > 4) {
-        AccVoxel accV({l[0][0], l[1][0], l[2][0]}, l[3][0], l[4][0], 0, false);
+        resVectAcc.emplace_back(AccVoxel({l[0][0], l[1][0], l[2][0]}, l[3][0], l[4][0], 0, false));
+        AccVoxel& accV = resVectAcc.back();
         //  l.size()-1 to remove the repeated last index in old version of DGtal
         for (unsigned int i = 5; i < l.size(); i++) {
           accV.faces.push_back(l[i][0]);
         }
-        resVectAcc.push_back(std::move(accV));
-
-
 #ifdef HelperDebugInfo
         std::cout << "<HelperDebugInfo>" std::endl;
         std::cout << "P:" << accV.p << " | ";
@@ -62,7 +59,29 @@ public:
       }
     }
 
+    // RVO，implicit std::move
     return resVectAcc;
+  }
+
+
+  // Function to get the min and max face counts in resVectAcc
+  static std::pair<size_t, size_t> getMinMaxFacesCount(const std::vector<AccVoxel>& accList) {
+    if (accList.empty()) {
+      throw std::runtime_error("The vector is empty");
+    }
+
+    // Lambda function to get the size of faces
+    auto faceSize = [](const AccVoxel& accV) { return accV.faces.size(); };
+
+    // Get min and max AccVoxel based on the size of the faces vector
+    auto minElem = std::min_element(accList.begin(), accList.end(),
+                                    [&](const AccVoxel& a, const AccVoxel& b) { return faceSize(a) < faceSize(b); });
+
+    auto maxElem = std::max_element(accList.begin(), accList.end(),
+                                    [&](const AccVoxel& a, const AccVoxel& b) { return faceSize(a) < faceSize(b); });
+
+    // Return the sizes (min, max)
+    return {minElem->faces.size(), maxElem->faces.size()};
   }
 
   /// @brief A function to hash a point

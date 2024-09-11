@@ -28,29 +28,32 @@
  */
 
 ///////////////////////////////////////////////////////////////////////////////
-
+#include <cstddef>
+#include <iostream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+///////////////////////////////////////////////////////////////////////////////
 #include "DGtal/base/Common.h"
 #include "DGtal/helpers/Shortcuts.h"
 #include "DGtal/helpers/ShortcutsGeometry.h"
 #include "DGtal/helpers/StdDefs.h"
 #include "DGtal/io/readers/MeshReader.h"
-#include <iostream>
-#include <string>
-
+///////////////////////////////////////////////////////////////////////////////
 #include "glm/fwd.hpp"
 #include "imgui.h"
 #include "polyscope/pick.h"
 #include "polyscope/point_cloud.h"
 #include "polyscope/point_cloud.ipp"
 #include "polyscope/polyscope.h"
+#include "polyscope/render/color_maps.h"
+#include "polyscope/render/engine.h"
 #include "polyscope/surface_mesh.h"
-
+///////////////////////////////////////////////////////////////////////////////
 #include "AccVoxel.h"
 #include "AccVoxelHelper.h"
-
 #include "CLI11.hpp"
 #include "Timer.h"
-
 ///////////////////////////////////////////////////////////////////////////////
 using namespace std;
 using namespace DGtal;
@@ -94,6 +97,11 @@ using namespace DGtal;
 
  */
 
+
+// =============================================================
+// ======================= Definitions =========================
+// =============================================================
+
 typedef PolygonalSurface<Z3i::RealPoint> PolySurface;
 typedef glm::vec3 PolyPoint;
 typedef vector<PolyPoint> PointLists;
@@ -101,6 +109,7 @@ typedef vector<PolyPoint> PointLists;
 static PolySurface currentPolysurf;
 static PolySurface firstPolysurf;
 
+/// Surface Editing
 static std::vector<int> vectSelection;
 static float minPaintRad = 1.0;
 static float maxPaintRad = 100.0;
@@ -117,6 +126,7 @@ static const int cursorFlag = 1;
 
 static std::string outputFileName{"result.obj"};
 
+/// Accumulation
 // event state control variables
 static bool accBtnPressed0 = false;
 static bool accBtnPressed1 = false;
@@ -131,21 +141,27 @@ static PointLists primaryVoxels;
 static PointLists selectingVoxels;
 std::vector<double> accmulationScalarValues;
 std::vector<glm::vec3> currentfacesColor;
+
+static FaceMap faceMapVoxel;
+
 // global selection data
 static size_t clickCount = 0;
 static size_t selectedElementId = 0;
-std::vector<size_t> selectedAssociatedFacesList;
-
-// structure type
-// enum STRUCTURETYPE { MESH, POINTCLOUD };
-// unordered_map<string, STRUCTURETYPE> structureTypes;
+static unordered_map<size_t, vector<AccVoxel::Uint>> selectedAssociatedFacesMap;
 
 static string structureSelected{""};
 static string promptText = "select nothing at the beginning\n";
 static int faceSelectedId = -1;
 static int voxelSelectedId = -1;
 
-static FaceMap faceMapVoxel;
+
+// structure type
+// enum STRUCTURETYPE { MESH, POINTCLOUD };
+// unordered_map<string, STRUCTURETYPE> structureTypes;
+
+// =============================================================
+// ======================== Functions ==========================
+// =============================================================
 
 void initFacesMap() {
   for (auto v : voxelList) {
@@ -189,38 +205,31 @@ void addPointCloudInPolyscopeFrom(string structName, PointLists structPoints, do
 
   polyscope::PointCloud* psCloud = polyscope::registerPointCloud(structName, structPoints);
   psCloud->setPointRadius(structRadius);
-  // set accmuluation as  scalar quantity)
+  // set accmuluation votes as scalar quantity)
   accmulationScalarValues.resize(voxelList.size());
   for (size_t i = 0; i < structPoints.size(); i++) {
     accmulationScalarValues[i] = voxelList[i].votes;
   }
   // use turbo color map (default)
   std::vector<double> accumulationQuantity(structPoints.size());
-  std::vector<double> accumulationTransparency(structPoints.size());
   for (size_t i = 0; i < structPoints.size(); i++) {
     accumulationQuantity[i] = accmulationScalarValues[i];
-    accumulationTransparency[i] = 0.5;
   }
   psCloud->addScalarQuantity("accumulationQuantity", accumulationQuantity)->setColorMap("turbo")->setEnabled(true);
-  auto q2 = psCloud->addScalarQuantity("accumulationTransparency", accumulationTransparency);
-  psCloud->setTransparencyQuantity(q2);
-  // psCloud->setTransparency(0.8);
+  psCloud->setTransparency(0.8);
   psCloud->setPointRenderMode(polyscope::PointRenderMode::Quad);
 
   {
-    // Random color map (color quantity)
-    // std::vector<std::array<double, 3>> randColor(structPoints.size());
-    // for (size_t i = 0; i < structPoints.size(); i++) {
-    //   randColor[i] = {{polyscope::randomUnit(), polyscope::randomUnit(), polyscope::randomUnit()}};
-    // }
-    // psCloud->addColorQuantity("random color", randColor)->setEnabled(true);
+    // setTransparencyQuantity does not support pick selection yet
+    // auto q2 = psCloud->addScalarQuantity("accumulationTransparency", accumulationTransparency);
+    // psCloud->setTransparencyQuantity(q2);
 
     // polyscope::loadColorMap("sampleColorMap", "/home/adam/Desktop/AccumulationSpace/samples/sample_colormap.png");
   }
   // structureTypes["InputPoints"] = POINTCLOUD;
 }
 
-void addSurfaceInPolyscope(PolySurface& psurf) {
+void addSurfaceInPolyscopeFrom(PolySurface& psurf) {
   std::vector<std::vector<std::size_t>> faces;
   vectSelection.clear();
   for (auto& face : psurf.allFaces()) {
@@ -309,7 +318,7 @@ void noisify(double scale = 0.01) {
       }
     }
   }
-  addSurfaceInPolyscope(currentPolysurf);
+  addSurfaceInPolyscopeFrom(currentPolysurf);
 }
 
 void deleteSelectedFaces() {
@@ -350,7 +359,7 @@ void deleteSelectedFaces() {
   }
   newSur.build();
   currentPolysurf = newSur;
-  addSurfaceInPolyscope(newSur);
+  addSurfaceInPolyscopeFrom(newSur);
 }
 
 void setImguiBegin() {
@@ -459,28 +468,28 @@ void mouseSelectIndexTest(ImGuiIO& io) {
 
 void storeAllAssociatedFacesInList() {
   auto voxelId = selectedElementId;
-  if (voxelId < 0) {
+  if (voxelId < 0 || static_cast<size_t>(voxelId) >= voxelList.size()) {
     return;
   }
-  for (auto f : voxelList[voxelId].faces) {
-    selectedAssociatedFacesList.push_back(f);
-  }
+  vector<AccVoxel::Uint> tempSelectedAssociatedFacesList;
+  selectedAssociatedFacesMap[selectedElementId] = voxelList[voxelId].faces;
 }
 
-void colorAllAssociatedFaces() {
+void paintAllAssociatedFaces() {
   // find all associated faces[DGtal face Id] on polyscope mesh
   auto digsurf = polyscope::getSurfaceMesh("InputMesh");
   if (digsurf == nullptr) {
     return;
   }
-
+  // TODO: make function flexible to use different color map
   currentfacesColor.resize(digsurf->nFaces(), digsurf->getSurfaceColor());
-  // cout << "currentfacesColor: " << digsurf->getSurfaceColor() << endl;
-  for (auto f : selectedAssociatedFacesList) {
-    currentfacesColor[f] = glm::vec3(1.0, 0.0, 0.0);
+  auto& usedColorMap = polyscope::render::engine->getColorMap("turbo");
+  double tempId = (voxelList[selectedElementId].votes * 1.0l - 21) / 317;
+  auto tempColor = usedColorMap.getValue(tempId);
+  for (auto faceId : selectedAssociatedFacesMap[selectedElementId]) {
+    currentfacesColor[faceId] = tempColor;
   }
-  // digsurf->setTransparency(0.6);
-  digsurf->addFaceColorQuantity("associated faces color", currentfacesColor);
+  digsurf->addFaceColorQuantity("associated faces color", currentfacesColor)->setEnabled(true);
 }
 
 void mouseSelectAccumulation(ImGuiIO& io) {
@@ -509,7 +518,7 @@ void mouseSelectAccumulation(ImGuiIO& io) {
         }
 
         storeAllAssociatedFacesInList();
-        colorAllAssociatedFaces();
+        paintAllAssociatedFaces();
       }
     }
   }
@@ -574,7 +583,7 @@ void setImguiCustomPanel() {
 
   if (ImGui::Button("reload src")) {
     currentPolysurf = firstPolysurf;
-    addSurfaceInPolyscope(currentPolysurf);
+    addSurfaceInPolyscopeFrom(currentPolysurf);
   }
   ImGui::Separator();
   ImGui::Text("Polyscope interface:");
@@ -590,6 +599,12 @@ void setImguiCustomPanel() {
   // add accumulation operations
   ImGui::Separator();
   ImGui::Text("Objects manipulation");
+
+  if (ImGui::Button("Reset selection color")) {
+    polyscope::getSurfaceMesh("InputMesh")->setSurfaceColor(glm::vec3(0.8f, 0.8f, 0.8f));
+
+    promptText = "[Surface Mesh]Reset surface color";
+  }
 
   if (ImGui::Button(accBtnPressed2 ? "Hide asscociated accumulations" : "Show asscociated accumulations")) {
     // TODO:
@@ -686,7 +701,7 @@ int main(int argc, char** argv) {
   // mesh structure
   DGtal::MeshHelpers::mesh2PolygonalSurface(aMesh, currentPolysurf);
   polyscope::state::userCallback = callbackFaceID;
-  addSurfaceInPolyscope(currentPolysurf);
+  addSurfaceInPolyscopeFrom(currentPolysurf);
   firstPolysurf = currentPolysurf;
 
   // pointCloud structure
