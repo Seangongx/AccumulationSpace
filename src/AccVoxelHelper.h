@@ -65,21 +65,18 @@ public:
 
 
   // Function to get the min and max face counts in resVectAcc
-  static std::pair<size_t, size_t> getMinMaxFacesCount(const std::vector<AccVoxel>& accList) {
+  static std::pair<size_t, size_t> getMinMaxFacesCountFrom(const std::vector<AccVoxel>& accList) {
     if (accList.empty()) {
       throw std::runtime_error("The vector is empty");
     }
 
     // Lambda function to get the size of faces
     auto faceSize = [](const AccVoxel& accV) { return accV.faces.size(); };
-
     // Get min and max AccVoxel based on the size of the faces vector
     auto minElem = std::min_element(accList.begin(), accList.end(),
                                     [&](const AccVoxel& a, const AccVoxel& b) { return faceSize(a) < faceSize(b); });
-
     auto maxElem = std::max_element(accList.begin(), accList.end(),
                                     [&](const AccVoxel& a, const AccVoxel& b) { return faceSize(a) < faceSize(b); });
-
     // Return the sizes (min, max)
     return {minElem->faces.size(), maxElem->faces.size()};
   }

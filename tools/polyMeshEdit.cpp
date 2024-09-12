@@ -28,6 +28,7 @@
  */
 
 ///////////////////////////////////////////////////////////////////////////////
+#include <boost/concept_archetype.hpp>
 #include <cstddef>
 #include <iostream>
 #include <string>
@@ -124,10 +125,12 @@ static const int unselectFlag = 200;
 static const int selectFlag = 50;
 static const int cursorFlag = 1;
 
-static std::string outputFileName{"result.obj"};
+static string outputFileName{"result.obj"};
+static string defaultMeshColorQuantityName{"associated faces color"};
 
 /// Accumulation
 // event state control variables
+static glm::vec3 defaultColor{0.8f, 0.8f, 0.8f};
 static bool accBtnPressed0 = false;
 static bool accBtnPressed1 = false;
 static bool accBtnPressed2 = false;
@@ -237,9 +240,7 @@ void addSurfaceInPolyscopeFrom(PolySurface& psurf) {
     vectSelection.push_back(unselectFlag);
   }
   auto digsurf = polyscope::registerSurfaceMesh("InputMesh", psurf.positions(), faces);
-
-  std::vector<glm::vec3> defaultColor(digsurf->nFaces(), glm::vec3(0.8f, 0.8f, 0.8f));
-  digsurf->addFaceColorQuantity("Face Colors", defaultColor)->setEnabled(true);
+  digsurf->setSurfaceColor(defaultColor);
   digsurf->setTransparency(0.4)->setEnabled(true);
   // updateSelection();
 }
@@ -489,7 +490,7 @@ void paintAllAssociatedFaces() {
   for (auto faceId : selectedAssociatedFacesMap[selectedElementId]) {
     currentfacesColor[faceId] = tempColor;
   }
-  digsurf->addFaceColorQuantity("associated faces color", currentfacesColor)->setEnabled(true);
+  digsurf->addFaceColorQuantity(defaultMeshColorQuantityName, currentfacesColor)->setEnabled(true);
 }
 
 void mouseSelectAccumulation(ImGuiIO& io) {
@@ -601,8 +602,11 @@ void setImguiCustomPanel() {
   ImGui::Text("Objects manipulation");
 
   if (ImGui::Button("Reset selection color")) {
-    polyscope::getSurfaceMesh("InputMesh")->setSurfaceColor(glm::vec3(0.8f, 0.8f, 0.8f));
-
+    auto tempMesh = polyscope::getSurfaceMesh("InputMesh");
+    currentfacesColor.clear();
+    currentfacesColor.resize(tempMesh->nFaces(), tempMesh->getSurfaceColor());
+    selectedAssociatedFacesMap.clear();
+    tempMesh->addFaceColorQuantity(defaultMeshColorQuantityName, currentfacesColor)->setEnabled(true);
     promptText = "[Surface Mesh]Reset surface color";
   }
 
