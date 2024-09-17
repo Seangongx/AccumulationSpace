@@ -30,7 +30,10 @@
 ///////////////////////////////////////////////////////////////////////////////
 #include <boost/concept_archetype.hpp>
 #include <cstddef>
+#include <cstdint>
+#include <cstdio>
 #include <iostream>
+#include <ostream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -141,15 +144,16 @@ static bool accBtnPressed5 = false;
 // global maintain data
 static vector<AccVoxel> voxelList;
 static PointLists primaryVoxels;
-static PointLists selectingVoxels;
 std::vector<double> accmulationScalarValues;
 std::vector<glm::vec3> currentfacesColor;
+static unordered_map<size_t, AccVoxel> globalHashMap;
+static unordered_map<size_t, vector<AccVoxel::Uint>> globalFaceMap;
 
-static FaceMap faceMapVoxel;
 
 // global selection data
 static size_t clickCount = 0;
 static size_t selectedElementId = 0;
+static PointLists selectedAssociatedVoxels;
 static unordered_map<size_t, vector<AccVoxel::Uint>> selectedAssociatedFacesMap;
 
 static string structureSelected{""};
@@ -158,25 +162,10 @@ static int faceSelectedId = -1;
 static int voxelSelectedId = -1;
 
 
-// structure type
-// enum STRUCTURETYPE { MESH, POINTCLOUD };
-// unordered_map<string, STRUCTURETYPE> structureTypes;
-
 // =============================================================
 // ======================== Functions ==========================
 // =============================================================
 
-void initFacesMap() {
-  for (auto v : voxelList) {
-    for (auto id : v.faces) {
-      size_t faceID = id;
-
-      // need to test the coherence with voxelmap
-      faceMapVoxel.addValue(id, AccVoxelHelper::accumulationHash(v.p));
-    }
-  }
-  faceMapVoxel.print();
-}
 
 void clearPoints() {
   if (!primaryVoxels.empty()) {
@@ -201,6 +190,7 @@ std::vector<glm::vec3> getPointsFromVoxelist(std::vector<AccVoxel>& voxelList) {
   }
   return points;
 }
+
 
 // Visualize accumulation set in space
 void addPointCloudInPolyscopeFrom(string structName, PointLists structPoints, double structRadius,
@@ -408,6 +398,25 @@ void setImguiIO(ImGuiIO& io) {
 //   }
 // }
 
+// It's interesting to see how many times this functioanlity is called
+size_t convertMeshElementIdInPolyscope(size_t elementId) {
+  if (elementId < 0) {
+    promptText = "ERROR: In convertMeshElementIdInPolyscope() element < 0";
+    cerr << "ERROR: In convertMeshElementIdInPolyscope() element < 0" << endl;
+    return static_cast<size_t>(-1);
+  }
+  auto facePickIndStart = currentPolysurf.nbVertices();
+  auto edgePickIndStart = facePickIndStart + currentPolysurf.nbFaces();
+  if (elementId < facePickIndStart) {        // vertex
+  } else if (elementId < edgePickIndStart) { // face
+    elementId -= facePickIndStart;
+  } else { // unknown
+    return static_cast<size_t>(-1);
+  }
+  return elementId;
+}
+
+
 void mouseSelectIndexTest(ImGuiIO& io) {
 
   std::pair<polyscope::Structure*, size_t> selection = polyscope::pick::getSelection();
@@ -421,20 +430,8 @@ void mouseSelectIndexTest(ImGuiIO& io) {
       return;
     }
     if (selection.first->typeName() == "Surface Mesh") {
-
       faceSelectedId = selection.second;
-
-      auto facePickIndStart = currentPolysurf.nbVertices();
-      auto edgePickIndStart = facePickIndStart + currentPolysurf.nbFaces();
-
-      if (faceSelectedId < facePickIndStart) {
-        promptText = "[Surface Mesh]Selected Vertex: " + to_string(faceSelectedId);
-      } else if (faceSelectedId < edgePickIndStart) {
-        (faceSelectedId -= facePickIndStart);
-        promptText = "[Surface Mesh]Selected Face: " + to_string(faceSelectedId);
-      } else {
-        promptText = "[Surface Mesh]Selected unknown element: " + to_string(faceSelectedId);
-      }
+      convertMeshElementIdInPolyscope(faceSelectedId);
     }
     // if (selection.first->typeName() == "Point Cloud") {
 
@@ -493,38 +490,105 @@ void paintAllAssociatedFaces() {
   digsurf->addFaceColorQuantity(defaultMeshColorQuantityName, currentfacesColor)->setEnabled(true);
 }
 
+
+vector<size_t> findLoadedAssociatedAccumulationsByFaceId() {
+  vector<size_t> associatedAccumulationIds;
+  auto faceId = selectedElementId;
+  auto it = globalFaceMap.find(faceId);
+  if (faceId < 0 || it == globalFaceMap.end()) {
+    cout << "FaceId out of range" << endl;
+    return associatedAccumulationIds;
+  }
+  for (auto l : it->second) {
+    associatedAccumulationIds.push_back(l);
+  }
+  return associatedAccumulationIds;
+}
+
+
+void paintSelectedAssociatedAccumulations(vector<size_t>& accumulations) {
+  // find all associated voxels[polyscope vector Id] in polyscope point cloud
+  auto InputPointCloud = polyscope::getPointCloud("Primary Voxels");
+  if (InputPointCloud == nullptr) {
+    return;
+  }
+  InputPointCloud->setEnabled(false);
+  for (auto accId : accumulations) {
+    // TODO: convertion color
+    // cout << primaryVoxels[accId].x << " " << primaryVoxels[accId].y << " " << primaryVoxels[accId].z << endl;
+    selectedAssociatedVoxels.push_back(primaryVoxels[accId]);
+  }
+  // paint selected voxels
+  polyscope::PointCloud* tempPointCloud =
+      polyscope::registerPointCloud("Selected Associated Voxels", selectedAssociatedVoxels);
+  tempPointCloud->setPointColor(glm::vec3{0, 0, 0});
+  tempPointCloud->setPointRadius(0.008);
+  // set accmuluation votes as scalar quantity)
+  // accmulationScalarValues.resize(voxelList.size());
+  // for (size_t i = 0; i < structPoints.size(); i++) {
+  //   accmulationScalarValues[i] = voxelList[i].votes;
+  // }
+  // use turbo color map (default)
+  // std::vector<double> accumulationQuantity(structPoints.size());
+  // for (size_t i = 0; i < structPoints.size(); i++) {
+  //   accumulationQuantity[i] = accmulationScalarValues[i];
+  // }
+  // tempPointCloud->addScalarQuantity("accumulationQuantity",
+  // accumulationQuantity)->setColorMap("turbo")->setEnabled(true);
+  tempPointCloud->setTransparency(0.8);
+  tempPointCloud->setPointRenderMode(polyscope::PointRenderMode::Quad);
+  tempPointCloud->setEnabled(true);
+}
+
 void mouseSelectAccumulation(ImGuiIO& io) {
   // polyscope default left-click selection
   if (polyscope::pick::haveSelection()) {
     std::pair<polyscope::Structure*, size_t> selection = polyscope::pick::getSelection();
-    size_t nb = 0;
-    // if (io.MouseClicked[0]) {
-    //   // if double clicked an accumulation voxel
-    //   if (selection.first->typeName() == "Point Cloud") {
-    //     nb = selection.second;
-    //     if (nb >= 0) {
-    //       clickCount++;
-    //       promptText = "[Click Accumulation]: " + to_string(nb);
-    //     }
-    //   }
-    // }
+    // if double clicked an accumulation voxel
     if (io.MouseDoubleClicked[0]) {
-      // if double clicked an accumulation voxel
+      if (selection.second < 0) {
+        promptText = "ERROR: In mouseSelectAccumulation() selection.second < 0";
+        cerr << "ERROR: In mouseSelectAccumulation() selection.second < 0" << endl;
+        return;
+      }
       if (selection.first->typeName() == "Point Cloud") {
-        nb = selection.second;
-        if (nb >= 0) {
-          clickCount++;
-          promptText = "[Double click Accumulation]: " + to_string(nb);
-          selectedElementId = nb;
-        }
-
+        clickCount++;
+        selectedElementId = convertMeshElementIdInPolyscope(selection.second);
         storeAllAssociatedFacesInList();
         paintAllAssociatedFaces();
+      } else if (selection.first->typeName() == "Surface Mesh") {
+        clickCount++;
+        selectedElementId = convertMeshElementIdInPolyscope(selection.second);
+        // TODO: find all associated accumulations (only add one each step for now)
+        auto accId = findLoadedAssociatedAccumulationsByFaceId();
+        if (accId.empty()) {
+          cerr << "ERROR: Find a " << accId.size() << " map" << endl;
+          return;
+        }
+        paintSelectedAssociatedAccumulations(accId); // one voxel for now vector<accId>
       }
+      promptText = "[Double click " + selection.first->typeName() + "]: " + to_string(selectedElementId);
     }
   }
 }
 
+void buildHashMap2Voxels() {
+  for (auto voxel : voxelList) {
+    globalHashMap[AccVoxelHelper::accumulationHash(voxel.p)] = voxel;
+  }
+  cout << "HashMap Finished size: " << globalHashMap.size() << endl;
+}
+
+void buildFaceMap2Voxels() {
+  for (size_t i = 0; i < voxelList.size(); i++) {
+    const auto& voxel = voxelList[i];
+    for (auto faceId : voxel.faces) {
+      globalFaceMap[faceId].push_back(i);
+      // std::cout << "Face ID " << faceId << " maps to Voxel Index " << i << std::endl;
+    }
+  }
+  cout << "Face Finished size: " << globalFaceMap.size() << endl;
+}
 
 // Get a structure map
 std::map<std::string, std::unique_ptr<polyscope::Structure>>& getStructureMapCreateIfNeeded(std::string typeName) {
@@ -601,13 +665,26 @@ void setImguiCustomPanel() {
   ImGui::Separator();
   ImGui::Text("Objects manipulation");
 
-  if (ImGui::Button("Reset selection color")) {
+  if (ImGui::Button("Reset selected color faces")) {
     auto tempMesh = polyscope::getSurfaceMesh("InputMesh");
+    if (tempMesh != nullptr) {
+      tempMesh->setEnabled(false);
+    }
     currentfacesColor.clear();
     currentfacesColor.resize(tempMesh->nFaces(), tempMesh->getSurfaceColor());
     selectedAssociatedFacesMap.clear();
-    tempMesh->addFaceColorQuantity(defaultMeshColorQuantityName, currentfacesColor)->setEnabled(true);
-    promptText = "[Surface Mesh]Reset surface color";
+    tempMesh->addFaceColorQuantity(defaultMeshColorQuantityName, currentfacesColor);
+    tempMesh->setEnabled(true);
+    promptText = "[" + tempMesh->typeName() + "] Reset faces color";
+  }
+
+  if (ImGui::Button("Reset selection color voxels")) {
+    auto tempVoxels = polyscope::getPointCloud("Selected Associated Voxels");
+    if (tempVoxels != nullptr) {
+      selectedAssociatedVoxels.clear();
+    }
+    tempVoxels = polyscope::registerPointCloud("Selected Associated Voxels", selectedAssociatedVoxels);
+    promptText = "[" + tempVoxels->typeName() + "] Reset voxels color";
   }
 
   if (ImGui::Button(accBtnPressed2 ? "Hide asscociated accumulations" : "Show asscociated accumulations")) {
@@ -650,10 +727,8 @@ void callbackFaceID() {
   setImguiCustomPanel();
   // io
   ImGuiIO& io = ImGui::GetIO();
-
   setImguiIO(io);
   mouseEventCallback(io);
-
   setImguiEnd();
   // updateSelection();
 }
@@ -712,7 +787,8 @@ int main(int argc, char** argv) {
   voxelList = AccVoxelHelper::getAccVoxelsFromFile(inputAccName);
   primaryVoxels = getPointsFromVoxelist(voxelList);
   addPointCloudInPolyscopeFrom("Primary Voxels", primaryVoxels, 0.008, glm::vec3(1.0f, 1.0f, 1.0f));
-  initFacesMap();
+  buildHashMap2Voxels();
+  buildFaceMap2Voxels();
 
   polyscope::show();
 

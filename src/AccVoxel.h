@@ -15,6 +15,9 @@
 #include <fstream>
 #include <unordered_map>
 
+
+typedef DGtal::uint32_t Uint;
+
 // @brief A structure to store a voxel in max-heap
 class AccVoxel {
 public:
@@ -44,11 +47,34 @@ public:
   bool operator<(const AccVoxel& rhs) const { return votes < rhs.votes; }
 };
 
+class AccumuationLog {
+
+  std::ofstream logFile;                         // log file stream
+  std::string logFileName{"AccumuationLog.txt"}; // log file name
+
+public:
+  AccumuationLog() {
+    logFile.open(logFileName, std::ios::out | std::ios::trunc); // Using trunc to overwrite
+    if (!logFile) {
+      std::cerr << "Unable to open log file: " << logFileName << std::endl;
+    } else {
+      logFile << "Log file opened successfully." << std::endl;
+    }
+  }
+  ~AccumuationLog() {
+    if (logFile.is_open()) {
+      logFile.close();
+    }
+  }
+  void addEnrty(const std::string& entry) { logFile << entry << std::endl; }
+};
+
+
 class FaceMap {
 private:
-  std::unordered_map<size_t, std::set<size_t>> data; // mapping face index to hashValue of voxels
-  std::ofstream logFile;                             // log file stream
-  std::string logFileName{"faceMapLog.txt"};         // log file name
+  std::unordered_map<size_t, std::set<Uint>> data; // mapping face index to hashValue of voxels
+  std::ofstream logFile;                           // log file stream
+  std::string logFileName{"faceMapLog.txt"};       // log file name
 
 public:
   FaceMap() {
@@ -69,7 +95,7 @@ public:
   // Add an empty set for the given index
   void addIndex(int index) {
     if (data.find(index) == data.end()) {
-      data[index] = std::set<size_t>();
+      data[index] = std::set<Uint>();
       logFile << "Index " << index << " added." << std::endl;
     } else {
       logFile << "Index " << index << " already exists." << std::endl;
@@ -115,7 +141,7 @@ public:
   }
 
   // Query the set of voxel hash values for the given index
-  const std::set<size_t>* getValues(int index) const {
+  const std::set<Uint>* getValues(int index) const {
     auto it = data.find(index);
     if (it != data.end()) {
       return &(it->second);
