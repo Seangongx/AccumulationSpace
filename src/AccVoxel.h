@@ -47,13 +47,13 @@ public:
   bool operator<(const AccVoxel& rhs) const { return votes < rhs.votes; }
 };
 
-class AccumuationLog {
+class AccLog {
 
   std::ofstream logFile;                         // log file stream
   std::string logFileName{"AccumuationLog.txt"}; // log file name
 
 public:
-  AccumuationLog() {
+  AccLog() {
     logFile.open(logFileName, std::ios::out | std::ios::trunc); // Using trunc to overwrite
     if (!logFile) {
       std::cerr << "Unable to open log file: " << logFileName << std::endl;
@@ -61,105 +61,12 @@ public:
       logFile << "Log file opened successfully." << std::endl;
     }
   }
-  ~AccumuationLog() {
+  ~AccLog() {
     if (logFile.is_open()) {
       logFile.close();
     }
   }
   void addEnrty(const std::string& entry) { logFile << entry << std::endl; }
-};
-
-
-class FaceMap {
-private:
-  std::unordered_map<size_t, std::set<Uint>> data; // mapping face index to hashValue of voxels
-  std::ofstream logFile;                           // log file stream
-  std::string logFileName{"faceMapLog.txt"};       // log file name
-
-public:
-  FaceMap() {
-    logFile.open(logFileName, std::ios::out | std::ios::trunc); // Using trunc to overwrite
-    if (!logFile) {
-      std::cerr << "Unable to open log file: " << logFileName << std::endl;
-    } else {
-      logFile << "Log file opened successfully." << std::endl;
-    }
-  }
-
-  ~FaceMap() {
-    if (logFile.is_open()) {
-      logFile.close();
-    }
-  }
-
-  // Add an empty set for the given index
-  void addIndex(int index) {
-    if (data.find(index) == data.end()) {
-      data[index] = std::set<Uint>();
-      logFile << "Index " << index << " added." << std::endl;
-    } else {
-      logFile << "Index " << index << " already exists." << std::endl;
-    }
-  }
-
-  // Erase the set of voxels for the given index
-  void removeIndex(int index) {
-    data.erase(index);
-    logFile << "Index " << index << " removed." << std::endl;
-  }
-
-  // Add a voxel hash value to the set for the given index
-  bool addValue(int index, size_t value) {
-    if (data.find(index) == data.end()) {
-      logFile << "Index " << index << " not found, adding index." << std::endl;
-      addIndex(index);
-    }
-
-    auto& values = data[index];
-    auto result = values.insert(value);
-    if (!result.second) {
-      logFile << "Value " << value << " already exists in the set for index " << index << "." << std::endl;
-      return false;
-    }
-    logFile << "Value " << value << " added to index " << index << "." << std::endl;
-    return true;
-  }
-
-  // Remove a voxel hash value from the set for the given index
-  void removeValue(int index, int value) {
-    if (data.find(index) != data.end()) {
-      auto& values = data[index];
-      size_t erased = values.erase(value);
-      if (erased == 0) {
-        logFile << "Value " << value << " not found in the set for index " << index << "." << std::endl;
-      } else {
-        logFile << "Value " << value << " removed from index " << index << "." << std::endl;
-      }
-    } else {
-      logFile << "Index " << index << " not found." << std::endl;
-    }
-  }
-
-  // Query the set of voxel hash values for the given index
-  const std::set<Uint>* getValues(int index) const {
-    auto it = data.find(index);
-    if (it != data.end()) {
-      return &(it->second);
-    } else {
-      return nullptr;
-    }
-  }
-
-  // Print all data to the log file
-  void print() {
-    for (const auto& pair : data) {
-      logFile << "Index " << pair.first << ": ";
-      for (size_t value : pair.second) {
-        logFile << value << " ";
-      }
-      logFile << std::endl;
-    }
-  }
 };
 
 #endif // !defined AccVoxel_h

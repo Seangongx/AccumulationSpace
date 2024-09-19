@@ -64,6 +64,21 @@ public:
   }
 
 
+  // Function to get the min and max votes counts in resVectAcc
+  static std::pair<size_t, size_t> getMinMaxVotesCountFrom(const std::vector<AccVoxel>& accList) {
+    if (accList.empty()) {
+      throw std::runtime_error("The vector is empty");
+    }
+
+    // Get min and max AccVoxel based on the size of the faces vector
+    auto minElem = std::min_element(accList.begin(), accList.end(),
+                                    [&](const AccVoxel& a, const AccVoxel& b) { return a.votes < b.votes; });
+    auto maxElem = std::max_element(accList.begin(), accList.end(),
+                                    [&](const AccVoxel& a, const AccVoxel& b) { return a.votes < b.votes; });
+    // Return the sizes (min, max)
+    return {minElem->votes, maxElem->votes};
+  }
+
   // Function to get the min and max face counts in resVectAcc
   static std::pair<size_t, size_t> getMinMaxFacesCountFrom(const std::vector<AccVoxel>& accList) {
     if (accList.empty()) {

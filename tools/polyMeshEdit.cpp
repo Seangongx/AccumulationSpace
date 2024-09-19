@@ -30,11 +30,11 @@
 ///////////////////////////////////////////////////////////////////////////////
 #include <boost/concept_archetype.hpp>
 #include <cstddef>
-#include <cstdint>
 #include <cstdio>
 #include <iostream>
 #include <ostream>
 #include <string>
+#include <sys/stat.h>
 #include <unordered_map>
 #include <vector>
 ///////////////////////////////////////////////////////////////////////////////
@@ -149,12 +149,13 @@ std::vector<glm::vec3> currentfacesColor;
 static unordered_map<size_t, AccVoxel> globalHashMap;
 static unordered_map<size_t, vector<AccVoxel::Uint>> globalFaceMap;
 
-
 // global selection data
 static size_t clickCount = 0;
 static size_t selectedElementId = 0;
-static PointLists selectedAssociatedVoxels;
+static PointLists selectedAssociatedPoints;
 static unordered_map<size_t, vector<AccVoxel::Uint>> selectedAssociatedFacesMap;
+static set<size_t> associatedAccumulationIds;
+pair<double, double> turboColorMapRange;
 
 static string structureSelected{""};
 static string promptText = "select nothing at the beginning\n";
@@ -469,7 +470,6 @@ void storeAllAssociatedFacesInList() {
   if (voxelId < 0 || static_cast<size_t>(voxelId) >= voxelList.size()) {
     return;
   }
-  vector<AccVoxel::Uint> tempSelectedAssociatedFacesList;
   selectedAssociatedFacesMap[selectedElementId] = voxelList[voxelId].faces;
 }
 
@@ -482,8 +482,10 @@ void paintAllAssociatedFaces() {
   // TODO: make function flexible to use different color map
   currentfacesColor.resize(digsurf->nFaces(), digsurf->getSurfaceColor());
   auto& usedColorMap = polyscope::render::engine->getColorMap("turbo");
-  double tempId = (voxelList[selectedElementId].votes * 1.0l - 21) / 317;
-  auto tempColor = usedColorMap.getValue(tempId);
+  auto tempMinMax = AccVoxelHelper::getMinMaxVotesCountFrom(voxelList);
+  double tempValue = (voxelList[selectedElementId].votes * 1.0l - tempMinMax.first) / tempMinMax.second;
+  auto tempColor = usedColorMap.getValue(tempValue);
+
   for (auto faceId : selectedAssociatedFacesMap[selectedElementId]) {
     currentfacesColor[faceId] = tempColor;
   }
@@ -491,50 +493,47 @@ void paintAllAssociatedFaces() {
 }
 
 
-vector<size_t> findLoadedAssociatedAccumulationsByFaceId() {
-  vector<size_t> associatedAccumulationIds;
+void findLoadedAssociatedAccumulationsByFaceId() {
   auto faceId = selectedElementId;
   auto it = globalFaceMap.find(faceId);
   if (faceId < 0 || it == globalFaceMap.end()) {
-    cout << "FaceId out of range" << endl;
-    return associatedAccumulationIds;
+    promptText = "ERROR: Current face " + to_string(selectedElementId) +
+                 " in findLoadedAssociatedAccumulationsByFaceId() faceId < 0";
+    return;
   }
   for (auto l : it->second) {
-    associatedAccumulationIds.push_back(l);
+    associatedAccumulationIds.insert(l);
   }
-  return associatedAccumulationIds;
 }
 
 
-void paintSelectedAssociatedAccumulations(vector<size_t>& accumulations) {
+void paintSelectedAssociatedAccumulations() {
   // find all associated voxels[polyscope vector Id] in polyscope point cloud
-  auto InputPointCloud = polyscope::getPointCloud("Primary Voxels");
-  if (InputPointCloud == nullptr) {
+  auto primaryPointCloud = polyscope::getPointCloud("Primary Voxels");
+  if (primaryPointCloud == nullptr) {
     return;
   }
-  InputPointCloud->setEnabled(false);
-  for (auto accId : accumulations) {
-    // TODO: convertion color
-    // cout << primaryVoxels[accId].x << " " << primaryVoxels[accId].y << " " << primaryVoxels[accId].z << endl;
-    selectedAssociatedVoxels.push_back(primaryVoxels[accId]);
+  primaryPointCloud->setEnabled(false);
+
+  selectedAssociatedPoints.clear();
+  vector<double> vScalar;
+  for (auto accId : associatedAccumulationIds) {
+    selectedAssociatedPoints.push_back(primaryVoxels[accId]);
+    vScalar.push_back(accmulationScalarValues[accId]);
+    cout << accId << " face and accumulation is " << accmulationScalarValues[accId] << endl;
   }
+
+  cout << associatedAccumulationIds.size() << endl;
   // paint selected voxels
   polyscope::PointCloud* tempPointCloud =
-      polyscope::registerPointCloud("Selected Associated Voxels", selectedAssociatedVoxels);
-  tempPointCloud->setPointColor(glm::vec3{0, 0, 0});
+      polyscope::registerPointCloud("Selected Associated Voxels", selectedAssociatedPoints);
   tempPointCloud->setPointRadius(0.008);
-  // set accmuluation votes as scalar quantity)
-  // accmulationScalarValues.resize(voxelList.size());
-  // for (size_t i = 0; i < structPoints.size(); i++) {
-  //   accmulationScalarValues[i] = voxelList[i].votes;
-  // }
-  // use turbo color map (default)
-  // std::vector<double> accumulationQuantity(structPoints.size());
-  // for (size_t i = 0; i < structPoints.size(); i++) {
-  //   accumulationQuantity[i] = accmulationScalarValues[i];
-  // }
-  // tempPointCloud->addScalarQuantity("accumulationQuantity",
-  // accumulationQuantity)->setColorMap("turbo")->setEnabled(true);
+  turboColorMapRange = AccVoxelHelper::getMinMaxVotesCountFrom(voxelList);
+  auto q1 = tempPointCloud->addScalarQuantity("AssoAcc", vScalar);
+  q1->setColorMap("turbo");
+  q1->setMapRange(turboColorMapRange);
+  q1->setEnabled(true);
+
   tempPointCloud->setTransparency(0.8);
   tempPointCloud->setPointRenderMode(polyscope::PointRenderMode::Quad);
   tempPointCloud->setEnabled(true);
@@ -553,19 +552,19 @@ void mouseSelectAccumulation(ImGuiIO& io) {
       }
       if (selection.first->typeName() == "Point Cloud") {
         clickCount++;
-        selectedElementId = convertMeshElementIdInPolyscope(selection.second);
+        selectedElementId = selection.second;
         storeAllAssociatedFacesInList();
         paintAllAssociatedFaces();
       } else if (selection.first->typeName() == "Surface Mesh") {
         clickCount++;
         selectedElementId = convertMeshElementIdInPolyscope(selection.second);
         // TODO: find all associated accumulations (only add one each step for now)
-        auto accId = findLoadedAssociatedAccumulationsByFaceId();
-        if (accId.empty()) {
-          cerr << "ERROR: Find a " << accId.size() << " map" << endl;
+        findLoadedAssociatedAccumulationsByFaceId();
+        if (associatedAccumulationIds.empty()) {
+          cerr << "ERROR: Find a " << associatedAccumulationIds.size() << " map" << endl;
           return;
         }
-        paintSelectedAssociatedAccumulations(accId); // one voxel for now vector<accId>
+        paintSelectedAssociatedAccumulations(); // one voxel for now vector<accId>
       }
       promptText = "[Double click " + selection.first->typeName() + "]: " + to_string(selectedElementId);
     }
@@ -681,9 +680,9 @@ void setImguiCustomPanel() {
   if (ImGui::Button("Reset selection color voxels")) {
     auto tempVoxels = polyscope::getPointCloud("Selected Associated Voxels");
     if (tempVoxels != nullptr) {
-      selectedAssociatedVoxels.clear();
+      selectedAssociatedPoints.clear();
     }
-    tempVoxels = polyscope::registerPointCloud("Selected Associated Voxels", selectedAssociatedVoxels);
+    tempVoxels = polyscope::registerPointCloud("Selected Associated Voxels", selectedAssociatedPoints);
     promptText = "[" + tempVoxels->typeName() + "] Reset voxels color";
   }
 
@@ -787,6 +786,8 @@ int main(int argc, char** argv) {
   voxelList = AccVoxelHelper::getAccVoxelsFromFile(inputAccName);
   primaryVoxels = getPointsFromVoxelist(voxelList);
   addPointCloudInPolyscopeFrom("Primary Voxels", primaryVoxels, 0.008, glm::vec3(1.0f, 1.0f, 1.0f));
+
+  // build necessary data structure
   buildHashMap2Voxels();
   buildFaceMap2Voxels();
 
