@@ -28,6 +28,7 @@
  */
 
 ///////////////////////////////////////////////////////////////////////////////
+#include <boost/concept_archetype.hpp>
 #include <cstddef>
 #include <cstdio>
 #include <iostream>
@@ -53,9 +54,8 @@
 #include "polyscope/render/engine.h"
 #include "polyscope/surface_mesh.h"
 ///////////////////////////////////////////////////////////////////////////////
-// #include "AccVoxel.h"
-// #include "AccVoxelHelper.h"
-#include "AccumulationSpace.h"
+#include "AccVoxel.h"
+#include "AccVoxelHelper.h"
 #include "CLI11.hpp"
 #include "Timer.h"
 ///////////////////////////////////////////////////////////////////////////////
@@ -109,10 +109,24 @@ using namespace DGtal;
 typedef PolygonalSurface<Z3i::RealPoint> PolySurface;
 typedef glm::vec3 PolyPoint;
 typedef vector<PolyPoint> PointLists;
-typedef AccumulationSpace::AccumulationVoxel AccVoxel;
 
 static PolySurface currentPolysurf;
 static PolySurface firstPolysurf;
+
+/// Surface Editing
+static std::vector<int> vectSelection;
+static float minPaintRad = 1.0;
+static float maxPaintRad = 100.0;
+static float minNoiseLevel = 1.0;
+static float maxNoiseLevel = 100.0;
+
+static float paintRad = 1.0;
+static float noiseLevel = 1.0;
+static int partialF = 1;
+static int randLarge = 100000;
+static const int unselectFlag = 200;
+static const int selectFlag = 50;
+static const int cursorFlag = 1;
 
 static string outputFileName{"result.obj"};
 static string defaultMeshColorQuantityName{"associated faces color"};
@@ -128,19 +142,18 @@ static bool accBtnPressed4 = false;
 static bool accBtnPressed5 = false;
 
 // global maintain data
-// static vector<AccVoxel> voxelList;
-// static PointLists primaryVoxels;
+static vector<AccVoxel> voxelList;
+static PointLists primaryVoxels;
 std::vector<double> accmulationScalarValues;
 std::vector<glm::vec3> currentfacesColor;
 static unordered_map<size_t, AccVoxel> globalHashMap;
-static unordered_map<size_t, vector<AccumulationSpace::DGtalUint>> globalFaceMap;
-AccumulationSpace::NormalAccumulationSpace normalAccSpace;
+static unordered_map<size_t, vector<AccVoxel::Uint>> globalFaceMap;
 
 // global selection data
 static size_t clickCount = 0;
 static size_t selectedElementId = 0;
 static PointLists selectedAssociatedPoints;
-static unordered_map<size_t, vector<AccumulationSpace::DGtalUint>> selectedAssociatedFacesMap;
+static unordered_map<size_t, vector<AccVoxel::Uint>> selectedAssociatedFacesMap;
 static set<size_t> associatedAccumulationIds;
 pair<double, double> turboColorMapRange;
 
@@ -153,12 +166,26 @@ static int voxelSelectedId = -1;
 // ======================== Functions ==========================
 // =============================================================
 
+void clearPoints() {
+  if (!primaryVoxels.empty()) {
+    vector<glm::vec3> temp;
+    primaryVoxels.swap(temp);
+  }
+}
+
+void updateSelection() {
+  polyscope::removeStructure("selection");
+  auto digsurf = polyscope::getSurfaceMesh("InputMesh");
+  digsurf->addFaceScalarQuantity("selection", vectSelection)
+      ->setMapRange(std::pair<double, double>{cursorFlag, unselectFlag});
+  digsurf->setAllQuantitiesEnabled(true);
+}
 
 // Polyscope use glm::vec3 as point type
 std::vector<glm::vec3> getPointsFromVoxelist(std::vector<AccVoxel>& voxelList) {
   std::vector<glm::vec3> points;
-  for (AccVoxel v : normalAccSpace.accVoxelList) {
-    points.push_back(glm::vec3(v.position[0], v.position[1], v.position[2]));
+  for (AccVoxel v : voxelList) {
+    points.push_back(glm::vec3(v.p[0], v.p[1], v.p[2]));
   }
   return points;
 }
@@ -170,9 +197,9 @@ void addPointCloudInPolyscopeFrom(string structName, PointLists structPoints, do
   polyscope::PointCloud* psCloud = polyscope::registerPointCloud(structName, structPoints);
   psCloud->setPointRadius(structRadius);
   // set accmuluation votes as scalar quantity)
-  accmulationScalarValues.resize(normalAccSpace.accVoxelList.size());
+  accmulationScalarValues.resize(voxelList.size());
   for (size_t i = 0; i < structPoints.size(); i++) {
-    accmulationScalarValues[i] = normalAccSpace.accVoxelList[i].votes;
+    accmulationScalarValues[i] = voxelList[i].votes;
   }
   // use turbo color map (default)
   std::vector<double> accumulationQuantity(structPoints.size());
@@ -196,8 +223,10 @@ void addPointCloudInPolyscopeFrom(string structName, PointLists structPoints, do
 
 void addSurfaceInPolyscopeFrom(PolySurface& psurf) {
   std::vector<std::vector<std::size_t>> faces;
+  vectSelection.clear();
   for (auto& face : psurf.allFaces()) {
     faces.push_back(psurf.verticesAroundFace(face));
+    vectSelection.push_back(unselectFlag);
   }
   auto digsurf = polyscope::registerSurfaceMesh("InputMesh", psurf.positions(), faces);
   digsurf->setSurfaceColor(defaultColor);
@@ -299,10 +328,10 @@ void mouseSelectIndexTest(ImGuiIO& io) {
 
 void storeAllAssociatedFacesInList() {
   auto voxelId = selectedElementId;
-  if (voxelId < 0 || static_cast<size_t>(voxelId) >= normalAccSpace.accVoxelList.size()) {
+  if (voxelId < 0 || static_cast<size_t>(voxelId) >= voxelList.size()) {
     return;
   }
-  selectedAssociatedFacesMap[selectedElementId] = normalAccSpace.accVoxelList[voxelId].associatedFaceIds;
+  selectedAssociatedFacesMap[selectedElementId] = voxelList[voxelId].faces;
 }
 
 void paintAllAssociatedFaces() {
@@ -314,9 +343,8 @@ void paintAllAssociatedFaces() {
   // TODO: make function flexible to use different color map
   currentfacesColor.resize(digsurf->nFaces(), digsurf->getSurfaceColor());
   auto& usedColorMap = polyscope::render::engine->getColorMap("turbo");
-  auto tempMinMax = AccumulationSpace::getMinMaxVotesCountFrom(normalAccSpace.accVoxelList);
-  double tempValue =
-      (normalAccSpace.accVoxelList[selectedElementId].votes * 1.0l - tempMinMax.first) / tempMinMax.second;
+  auto tempMinMax = AccVoxelHelper::getMinMaxVotesCountFrom(voxelList);
+  double tempValue = (voxelList[selectedElementId].votes * 1.0l - tempMinMax.first) / tempMinMax.second;
   auto tempColor = usedColorMap.getValue(tempValue);
 
   for (auto faceId : selectedAssociatedFacesMap[selectedElementId]) {
@@ -349,7 +377,7 @@ void paintSelectedAssociatedAccumulations() {
   selectedAssociatedPoints.clear();
   vector<double> vScalar;
   for (auto accId : associatedAccumulationIds) {
-    selectedAssociatedPoints.push_back(normalAccSpace.accPointList[accId]);
+    selectedAssociatedPoints.push_back(primaryVoxels[accId]);
     vScalar.push_back(accmulationScalarValues[accId]);
     cout << accId << " face and accumulation is " << accmulationScalarValues[accId] << endl;
   }
@@ -359,7 +387,7 @@ void paintSelectedAssociatedAccumulations() {
   polyscope::PointCloud* tempPointCloud =
       polyscope::registerPointCloud("Selected Associated Voxels", selectedAssociatedPoints);
   tempPointCloud->setPointRadius(0.008);
-  turboColorMapRange = AccumulationSpace::getMinMaxVotesCountFrom(normalAccSpace.accVoxelList);
+  turboColorMapRange = AccVoxelHelper::getMinMaxVotesCountFrom(voxelList);
   auto q1 = tempPointCloud->addScalarQuantity("AssoAcc", vScalar);
   q1->setColorMap("turbo");
   q1->setMapRange(turboColorMapRange);
@@ -405,16 +433,16 @@ void mouseSelectAccumulation(ImGuiIO& io) {
 }
 
 void buildHashMap2Voxels() {
-  for (auto voxel : normalAccSpace.accVoxelList) {
-    globalHashMap[AccumulationSpace::accumulationHash(voxel.position)] = voxel;
+  for (auto voxel : voxelList) {
+    globalHashMap[AccVoxelHelper::accumulationHash(voxel.p)] = voxel;
   }
   cout << "HashMap Finished size: " << globalHashMap.size() << endl;
 }
 
 void buildFaceMap2Voxels() {
-  for (size_t i = 0; i < normalAccSpace.accVoxelList.size(); i++) {
-    const auto& voxel = normalAccSpace.accVoxelList[i];
-    for (auto faceId : voxel.associatedFaceIds) {
+  for (size_t i = 0; i < voxelList.size(); i++) {
+    const auto& voxel = voxelList[i];
+    for (auto faceId : voxel.faces) {
       globalFaceMap[faceId].push_back(i);
     }
   }
@@ -546,21 +574,27 @@ int main(int argc, char** argv) {
   CLI11_PARSE(app, argc, argv);
 
   // build visualization interface
-  polyscope::options::programName = "PolyAccEdit1 - (DGtalToolsContrib) " + Timer::now();
+  polyscope::options::programName = "PolyMeshEdit - (DGtalToolsContrib) " + Timer::now();
   polyscope::init();
   // polyscope::view::windowWidth = 1024;
   // polyscope::view::windowHeight = 768;
   polyscope::options::buildGui = true;
 
-  // Build accumulation space
-  // AccumulationSpace::NormalAccumulationSpace normalAccSpace;
-  normalAccSpace.buildFromFile(inputAccName);
+  // ImGui::SetWindowFontScale(2.0f);
 
   // read input mesh
   DGtal::Mesh<DGtal::Z3i::RealPoint> aMesh(true);
   aMesh << inputFileName;
   aMesh.removeIsolatedVertices();
   auto bb = aMesh.getBoundingBox();
+
+  // Setting scale mesh dependant parameters
+  minPaintRad = (bb.second - bb.first).norm() / 1000.0;
+  maxPaintRad = (bb.second - bb.first).norm() / 2.0;
+  minNoiseLevel = (bb.second - bb.first).norm() / 10000.0;
+  maxNoiseLevel = (bb.second - bb.first).norm() / 100.0;
+  noiseLevel = (bb.second - bb.first).norm() / 1000.0;
+  paintRad = (bb.second - bb.first).norm() / 50.0;
 
   // mesh structure
   DGtal::MeshHelpers::mesh2PolygonalSurface(aMesh, currentPolysurf);
@@ -569,10 +603,9 @@ int main(int argc, char** argv) {
   firstPolysurf = currentPolysurf;
 
   // pointCloud structure
-  // voxelList = AccVoxelHelper::getAccVoxelsFromFile(inputAccName);
-  // primaryVoxels = getPointsFromVoxelist(voxelList);
-  // addPointCloudInPolyscopeFrom("Primary Voxels", primaryVoxels, 0.008, glm::vec3(1.0f, 1.0f, 1.0f));
-  addPointCloudInPolyscopeFrom("Primary Voxels", normalAccSpace.accPointList, 0.008, glm::vec3(1.0f, 1.0f, 1.0f));
+  voxelList = AccVoxelHelper::getAccVoxelsFromFile(inputAccName);
+  primaryVoxels = getPointsFromVoxelist(voxelList);
+  addPointCloudInPolyscopeFrom("Primary Voxels", primaryVoxels, 0.008, glm::vec3(1.0f, 1.0f, 1.0f));
 
   // build necessary data structure
   buildHashMap2Voxels();

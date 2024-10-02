@@ -19,6 +19,7 @@ SET(AS_COMMAND_SRC
 )
 SET(AS_TOOLS_SRC 
     ${PROJECT_SOURCE_DIR}/src/AccVoxelHelper.h
+    ${PROJECT_SOURCE_DIR}/src/AccumulationSpace.h
 )
 
 # Include DGtal
