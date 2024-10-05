@@ -1,7 +1,5 @@
+
 #include "AccumulationSpace.h"
-#include <algorithm>
-#include <iostream>
-#include <stdexcept>
 
 namespace AccumulationSpace {
 
@@ -26,9 +24,9 @@ AccumulationLog::AccumulationLog(LogLevel level) : logLevel(level), logFileName(
   logFile.open(logFileName, std::ios::out | std::ios::trunc);
   if (!logFile) {
     std::cerr << "Unable to open log file: " << logFileName << std::endl;
-    log(LogLevel::ERROR, logLevelToString(LogLevel::ERROR), ": Unable to open log file: ", logFileName);
+    add(LogLevel::ERROR, "Unable to open log file: ", logFileName, " at ", Timer::now());
   } else {
-    log(LogLevel::INFO, logLevelToString(LogLevel::INFO), ": Log file opened successfully.");
+    add(LogLevel::INFO, "Log file opened successfully.", Timer::now());
   }
 }
 AccumulationLog::AccumulationLog(const std::string& logFileName, LogLevel level)
@@ -36,20 +34,20 @@ AccumulationLog::AccumulationLog(const std::string& logFileName, LogLevel level)
   logFile.open(logFileName, std::ios::out | std::ios::trunc);
   if (!logFile) {
     std::cerr << "Unable to open log file: " << logFileName << std::endl;
-    log(LogLevel::ERROR, logLevelToString(LogLevel::ERROR), ": Unable to open log file: ", logFileName);
+    add(LogLevel::ERROR, "Unable to open log file: ", logFileName, " at ", Timer::now());
   } else {
-    log(LogLevel::INFO, logLevelToString(LogLevel::INFO), ": Log file opened successfully.");
+    add(LogLevel::INFO, "Log file opened successfully at", Timer::now());
   }
 }
 AccumulationLog::~AccumulationLog() {
   if (logFile.is_open()) {
-    log(LogLevel::INFO, logLevelToString(LogLevel::INFO), ": Log file closed");
+    add(LogLevel::INFO, "Log file closed", "at", Timer::now());
     logFile.close();
   }
 }
 // No need for endl
 template <typename... Args>
-void AccumulationLog::log(LogLevel level, Args&&... args) {
+void AccumulationLog::add(LogLevel level, Args&&... args) {
   if (level >= logLevel) {
     logFile << addLogMessage(logLevelToString(level), ": ", std::forward<Args>(args)...) << std::endl;
   }
@@ -87,14 +85,14 @@ NormalAccumulationSpace::NormalAccumulationSpace() {
   rangeFaceCount = std::make_pair(0, 0);
 }
 void NormalAccumulationSpace::buildFromFile(const std::string& inputFileName) {
-  acclog.log(LogLevel::INFO, "Initiate Nomral Accumulation Space(NAS) from ", inputFileName);
+  acclog.add(LogLevel::INFO, "Initiate Nomral Accumulation Space(NAS) from ", inputFileName);
 
   getVoxelListFromFile(inputFileName);
   getPointsFromVoxelList();
   rangeVoteValue = AccumulationSpace::getMinMaxVotesCountFrom(voxelList);
   rangeFaceCount = AccumulationSpace::getMinMaxFacesCountFrom(voxelList);
 
-  acclog.log(LogLevel::INFO, "Finished building Nomral Accumulation Space(NAS)");
+  acclog.add(LogLevel::INFO, "Finished building Nomral Accumulation Space(NAS)");
 }
 void NormalAccumulationSpace::getVoxelListFromFile(const std::string& filename) {
 
@@ -114,7 +112,7 @@ void NormalAccumulationSpace::getVoxelListFromFile(const std::string& filename) 
         oss << f << " ";
       }
 
-      acclog.log(LogLevel::INFO, typeid(*this).name(), oss.str());
+      acclog.add(LogLevel::DEBUG, "<", typeid(*this).name(), ">", oss.str());
     }
   }
 }

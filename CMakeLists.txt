@@ -18,8 +18,10 @@ SET(AS_COMMAND_SRC
     ${PROJECT_SOURCE_DIR}/src/NormalAccumulator.cpp
 )
 SET(AS_TOOLS_SRC 
-    ${PROJECT_SOURCE_DIR}/src/AccVoxelHelper.h
     ${PROJECT_SOURCE_DIR}/src/AccumulationSpace.h
+    ${PROJECT_SOURCE_DIR}/src/AccumulationSpace.ipp
+    ${PROJECT_SOURCE_DIR}/src/PolyscopeEnvironment.h
+    ${PROJECT_SOURCE_DIR}/src/PolyscopeEnvironment.ipp
 )
 
 # Include DGtal
