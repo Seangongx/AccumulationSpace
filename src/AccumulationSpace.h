@@ -21,7 +21,6 @@
 #include <vector>
 ///////////////////////////////////////////////////////////////////////////////
 #include "DGtal/helpers/StdDefs.h"
-#include "Timer.h"
 #include "glm/fwd.hpp"
 #include "glm/vec3.hpp"
 ///////////////////////////////////////////////////////////////////////////////
@@ -46,10 +45,16 @@ std::pair<size_t, size_t> getMinMaxVotesCountFrom(const std::vector<Accumulation
 std::pair<size_t, size_t> getMinMaxFacesCountFrom(const std::vector<AccumulationVoxel>& accList);
 size_t accumulationHash(DGtalPoint3D pos);
 
+///////////////////////////////////////////////////////////////////////////////
+/**
+ * @class AccumulationLog
+ * @brief The class to print and save log messages
+ */
 class AccumulationLog {
 public:
-  AccumulationLog(LogLevel level = LogLevel::DEBUG);
-  AccumulationLog(const std::string& logFileName, LogLevel level = LogLevel::DEBUG);
+  AccumulationLog();
+  AccumulationLog(LogLevel level);
+  AccumulationLog(const std::string& logFileName, LogLevel ll);
   ~AccumulationLog();
 
   template <typename... Args>
@@ -58,7 +63,7 @@ public:
 private:
   std::ofstream logFile;
   std::string logFileName;
-  LogLevel logLevel;
+  LogLevel level;
 
   template <typename T>
   void appendToStream(std::ostringstream& oss, T&& arg);
@@ -68,7 +73,11 @@ private:
   std::string addLogMessage(Args&&... args);
 };
 
-// @brief The class to store unit information for each voxel
+///////////////////////////////////////////////////////////////////////////////
+/**
+ * @class AccumulationVoxel
+ * @brief The class to store unit information for each voxel
+ */
 class AccumulationVoxel {
 public:
   DGtalPoint3D position = DGtalPoint3D(0, 0, 0);
@@ -88,6 +97,7 @@ public:
   bool operator<(const AccumulationVoxel& rhs) const { return votes < rhs.votes; }
 };
 
+///////////////////////////////////////////////////////////////////////////////
 /**
  * @class NormalAccumulationSpace
  * @brief The normal accumulation space of a shape
@@ -95,7 +105,7 @@ public:
 class NormalAccumulationSpace {
 public:
   NormalAccumulationSpace();
-  NormalAccumulationSpace(const std::string& inputFileName) { buildFromFile(inputFileName); };
+  NormalAccumulationSpace(const std::string& inputFileName, AccumulationSpace::LogLevel ll);
   ~NormalAccumulationSpace(){};
 
   void buildFromFile(const std::string& inputFileName);

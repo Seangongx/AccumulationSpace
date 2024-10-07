@@ -1,5 +1,5 @@
-
 #include "AccumulationSpace.h"
+#include "Timer.h"
 
 namespace AccumulationSpace {
 
@@ -20,7 +20,7 @@ std::string logLevelToString(LogLevel level) {
 }
 
 // AccumulationLog
-AccumulationLog::AccumulationLog(LogLevel level) : logLevel(level), logFileName("AccumuationSpaceLog.txt") {
+AccumulationLog::AccumulationLog() : level(LogLevel::INFO), logFileName("AccumuationSpaceLog.txt") {
   logFile.open(logFileName, std::ios::out | std::ios::trunc);
   if (!logFile) {
     std::cerr << "Unable to open log file: " << logFileName << std::endl;
@@ -29,8 +29,16 @@ AccumulationLog::AccumulationLog(LogLevel level) : logLevel(level), logFileName(
     add(LogLevel::INFO, "Log file opened successfully.", Timer::now());
   }
 }
-AccumulationLog::AccumulationLog(const std::string& logFileName, LogLevel level)
-    : logFileName(logFileName), logLevel(level) {
+AccumulationLog::AccumulationLog(LogLevel ll) : level(ll), logFileName("AccumuationSpaceLog.txt") {
+  logFile.open(logFileName, std::ios::out | std::ios::trunc);
+  if (!logFile) {
+    std::cerr << "Unable to open log file: " << logFileName << std::endl;
+    add(LogLevel::ERROR, "Unable to open log file: ", logFileName, " at ", Timer::now());
+  } else {
+    add(LogLevel::INFO, "Log file opened successfully.", Timer::now());
+  }
+}
+AccumulationLog::AccumulationLog(const std::string& logFileName, LogLevel ll) : logFileName(logFileName), level(ll) {
   logFile.open(logFileName, std::ios::out | std::ios::trunc);
   if (!logFile) {
     std::cerr << "Unable to open log file: " << logFileName << std::endl;
@@ -41,18 +49,17 @@ AccumulationLog::AccumulationLog(const std::string& logFileName, LogLevel level)
 }
 AccumulationLog::~AccumulationLog() {
   if (logFile.is_open()) {
-    add(LogLevel::INFO, "Log file closed", "at", Timer::now());
+    add(LogLevel::INFO, "Log file closed at ", Timer::now());
     logFile.close();
   }
 }
 // No need for endl
 template <typename... Args>
-void AccumulationLog::add(LogLevel level, Args&&... args) {
-  if (level >= logLevel) {
-    logFile << addLogMessage(logLevelToString(level), ": ", std::forward<Args>(args)...) << std::endl;
+void AccumulationLog::add(LogLevel ll, Args&&... args) {
+  if (ll >= level) {
+    logFile << addLogMessage(logLevelToString(ll), ": ", std::forward<Args>(args)...) << std::endl;
   }
 }
-
 // Helper function to append log messages
 template <typename T>
 void AccumulationLog::appendToStream(std::ostringstream& oss, T&& arg) {
@@ -80,10 +87,14 @@ AccumulationVoxel::AccumulationVoxel() {
 }
 
 // NormalAccumulationSpace
-NormalAccumulationSpace::NormalAccumulationSpace() {
+NormalAccumulationSpace::NormalAccumulationSpace() : acclog(LogLevel::INFO) {
   rangeVoteValue = std::make_pair(0, 0);
   rangeFaceCount = std::make_pair(0, 0);
 }
+NormalAccumulationSpace::NormalAccumulationSpace(const std::string& inputFileName, AccumulationSpace::LogLevel ll)
+    : acclog(ll) {
+  buildFromFile(inputFileName);
+};
 void NormalAccumulationSpace::buildFromFile(const std::string& inputFileName) {
   acclog.add(LogLevel::INFO, "Initiate Nomral Accumulation Space(NAS) from ", inputFileName);
 
@@ -91,7 +102,6 @@ void NormalAccumulationSpace::buildFromFile(const std::string& inputFileName) {
   getPointsFromVoxelList();
   rangeVoteValue = AccumulationSpace::getMinMaxVotesCountFrom(voxelList);
   rangeFaceCount = AccumulationSpace::getMinMaxFacesCountFrom(voxelList);
-
   acclog.add(LogLevel::INFO, "Finished building Nomral Accumulation Space(NAS)");
 }
 void NormalAccumulationSpace::getVoxelListFromFile(const std::string& filename) {

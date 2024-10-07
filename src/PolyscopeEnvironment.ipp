@@ -1,9 +1,19 @@
+#include "DGtal/io/readers/MeshReader.h"
+#include "DGtal/shapes/MeshHelpers.h"
 #include "PolyscopeEnvironment.h"
+#include "polyscope/pick.h"
+#include "polyscope/point_cloud.h"
+#include "polyscope/point_cloud.ipp"
+#include "polyscope/polyscope.h"
+#include "polyscope/render/color_maps.h"
+#include "polyscope/render/engine.h"
+#include "polyscope/surface_mesh.h"
 
 namespace PolyscopeEnvironment {
 
+Manager::Manager(const std::string& meshFile, const std::string& accFile, AccumulationSpace::LogLevel level)
+    : nas(accFile, level) {
 
-Manager::Manager(const std::string& meshFile, const std::string& accFile) {
   // Initialize polyscope
   polyscope::options::programName = "PolyAccEdit - (DGtalToolsContrib) " + Timer::now();
   polyscope::init();
@@ -20,8 +30,7 @@ Manager::Manager(const std::string& meshFile, const std::string& accFile) {
   // Load default data
   addSurface(currentPolysurf);
   firstPolysurf = currentPolysurf;
-  nas.buildFromFile(accFile);
-  addPointCloud("Primary Voxels", nas.pointList, 0.008, glm::vec3(1.0f, 1.0f, 1.0f));
+  addPointCloud("Primary Voxels", nas.pointList, 0.008);
 
   promptText = "Select nothing at the beginning\n";
   // build necessary data structure
@@ -34,7 +43,12 @@ Manager::Manager(const std::string& meshFile, const std::string& accFile) {
 
 
 // Visualize accumulation set in space
-void Manager::addPointCloud(std::string structName, PointLists structPoints, double structRadius, PsColor structColor) {
+void Manager::addPointCloud(const std::string& structName, PointLists& structPoints, double structRadius) {
+  if (nas.voxelList.size() != nas.pointList.size()) {
+    std::cerr << "Error: voxelList and pointList size mismatch" << std::endl;
+    nas.acclog.add(LogLevel::ERROR, "Error: voxelList and pointList size mismatch");
+    return;
+  }
 
   polyscope::PointCloud* psCloud = polyscope::registerPointCloud(structName, structPoints);
   psCloud->setPointRadius(structRadius);
@@ -44,11 +58,7 @@ void Manager::addPointCloud(std::string structName, PointLists structPoints, dou
     accmulationScalarValues[i] = nas.voxelList[i].votes;
   }
   // use turbo color map (default)
-  std::vector<double> accumulationQuantity(structPoints.size());
-  for (size_t i = 0; i < structPoints.size(); i++) {
-    accumulationQuantity[i] = accmulationScalarValues[i];
-  }
-  psCloud->addScalarQuantity("accumulationQuantity", accumulationQuantity)->setColorMap("turbo")->setEnabled(true);
+  psCloud->addScalarQuantity("accumulationQuantity", accmulationScalarValues)->setColorMap("turbo")->setEnabled(true);
   psCloud->setTransparency(0.8);
   psCloud->setPointRenderMode(polyscope::PointRenderMode::Quad);
 
@@ -275,10 +285,10 @@ void Manager::paintSelectedAssociatedAccumulations() {
   for (auto accId : associatedAccumulationIds) {
     selectedAssociatedPoints.push_back(nas.pointList[accId]);
     vScalar.push_back(accmulationScalarValues[accId]);
-    std::cout << accId << " face and accumulation is " << accmulationScalarValues[accId] << std::endl;
+    nas.acclog.add(LogLevel::DEBUG, accId, " face and accumulation is ", accmulationScalarValues[accId]);
   }
 
-  std::cout << associatedAccumulationIds.size() << std::endl;
+  nas.acclog.add(LogLevel::DEBUG, associatedAccumulationIds.size(), " voxels selected ", Timer::now());
   // paint selected voxels
   polyscope::PointCloud* tempPointCloud =
       polyscope::registerPointCloud("Selected Associated Voxels", selectedAssociatedPoints);

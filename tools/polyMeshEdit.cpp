@@ -28,30 +28,11 @@
  */
 
 ///////////////////////////////////////////////////////////////////////////////
-#include <cstddef>
-#include <string>
-#include <sys/stat.h>
-///////////////////////////////////////////////////////////////////////////////
-#include "DGtal/base/Common.h"
-#include "DGtal/helpers/Shortcuts.h"
-#include "DGtal/helpers/ShortcutsGeometry.h"
-#include "DGtal/helpers/StdDefs.h"
-#include "DGtal/io/readers/MeshReader.h"
-///////////////////////////////////////////////////////////////////////////////
-#include "glm/fwd.hpp"
-#include "imgui.h"
-#include "polyscope/pick.h"
-#include "polyscope/point_cloud.h"
-#include "polyscope/point_cloud.ipp"
-#include "polyscope/polyscope.h"
-#include "polyscope/render/color_maps.h"
-#include "polyscope/render/engine.h"
-#include "polyscope/surface_mesh.h"
-///////////////////////////////////////////////////////////////////////////////
 #include "CLI11.hpp"
 #include "PolyscopeEnvironment.h"
 #include "PolyscopeEnvironment.ipp"
-#include "Timer.h"
+#include <string>
+#include <sys/stat.h>
 ///////////////////////////////////////////////////////////////////////////////
 using namespace std;
 using namespace DGtal;
@@ -81,6 +62,7 @@ using namespace DGtal;
    -h,--help                             Print this help message and exit
    -i,--input TEXT:FILE REQUIRED         an input mesh file in .obj or .off
  format.
+   -l,--logLevel INT:INT                 0: DEBUG, 1: INFO, 2: WARNING, 3: ERROR
  @endcode
 
  @b Example:
@@ -100,6 +82,7 @@ int main(int argc, char** argv) {
 
   std::string defaultMeshFile{""};
   std::string defaultAccFile{""};
+  AccumulationSpace::LogLevel logLevel = AccumulationSpace::LogLevel::INFO;
 
   // parse command line using CLI ----------------------------------------------
   CLI::App app;
@@ -112,12 +95,13 @@ int main(int argc, char** argv) {
       ->required()
       ->check(CLI::ExistingFile);
   app.add_option("-a,--inputAcc,2", defaultAccFile, "an input accumulation file in .dat format.", true);
+  app.add_option("-l,--logLevel,3", logLevel, "0: DEBUG, 1: INFO, 2: WARNING, 3: ERROR", true);
 
   app.get_formatter()->column_width(40);
   CLI11_PARSE(app, argc, argv);
 
   // Build environment
-  PolyscopeEnvironment::Manager psManager{defaultMeshFile, defaultAccFile};
+  PolyscopeEnvironment::Manager psManager{defaultMeshFile, defaultAccFile, logLevel};
 
   return 0;
 }

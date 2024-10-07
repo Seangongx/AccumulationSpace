@@ -1,22 +1,27 @@
 #ifndef POLYSCOPE_ENVIRONMENT_H
 #define POLYSCOPE_ENVIRONMENT_H
 
-// Include necessary standard libraries
-#include <iostream>
+/**
+ * @file AccumulationSpace.h
+ * @brief Define the main data structure and test algorithm for an accumulation
+ * space.
+ *
+ * This file is part of the DGtal library/DGtalTools-contrib Project.
+ *
+ * @author Bertrand Kerautret (\c bertrand.kerautret@univ-lyon2.fr )
+ *         Xun Gong (\c sean.gong814@gmail.com)
+ * @date 2024-10-4
+ */
+
+///////////////////////////////////////////////////////////////////////////////
 #include <string>
 #include <vector>
 ////////////////////////////////////////////////////////////////////////////////
 #include "AccumulationSpace.h"
 #include "AccumulationSpace.ipp"
+#include "DGtal/shapes/Mesh.h"
 #include "DGtal/shapes/PolygonalSurface.h"
 #include "imgui.h"
-#include "polyscope/pick.h"
-#include "polyscope/point_cloud.h"
-#include "polyscope/point_cloud.ipp"
-#include "polyscope/polyscope.h"
-#include "polyscope/render/color_maps.h"
-#include "polyscope/render/engine.h"
-#include "polyscope/surface_mesh.h"
 ////////////////////////////////////////////////////////////////////////////////
 
 namespace PolyscopeEnvironment {
@@ -34,13 +39,13 @@ typedef std::vector<PsPoint3D> PointLists;
 // Manager class for Polyscope environment settings
 class Manager {
 public:
-  Manager() {}
-  Manager(const std::string& meshFile, const std::string& accFile);
+  Manager(){};
+  Manager(const std::string& meshFile, const std::string& accFile, AccumulationSpace::LogLevel logLevel);
   ~Manager(){};
 
   void init(const NormalAccumulationSpace& nas);
   void addSurface(PolySurface& psurf);
-  void addPointCloud(std::string structName, PointLists structPoints, double structRadius, glm::vec3 structColor);
+  void addPointCloud(const std::string& structName, PointLists& structPoints, double structRadius);
   void buildHashMap2Voxels();
   void buildFaceMap2Voxels();
 
