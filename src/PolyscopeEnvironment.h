@@ -66,7 +66,7 @@ public:
   PointLists selectedAssociatedPoints;
   std::unordered_map<size_t, std::vector<DGtalUint>> selectedAssociatedFacesMap;
   std::vector<PsColor> currentfacesColor;
-  std::string defaultMeshColorQuantityName{"associated faces color"};
+  std::vector<PsColor> defaultfacesColor;
   // event state control variables
   bool accBtnPressed0 = false;
   bool accBtnPressed1 = false;
@@ -76,21 +76,32 @@ public:
   bool accBtnPressed5 = false;
 
 private:
-  void storeAllAssociatedFacesInList();
-  void paintAllAssociatedFaces();
-  void findLoadedAssociatedAccumulationsByFaceId();
-  void paintSelectedAssociatedAccumulations();
   size_t convertMeshElementIdInPolyscope(size_t elementId);
-  void mouseSelectIndexTest(ImGuiIO& io);
-  void mouseSelectAccumulation(ImGuiIO& io);
-  void mouseEventCallback(ImGuiIO& io);
+  void findLoadedAssociatedAccumulationsByFaceId();
+  void storeSelectedAssociatedFacesInList();
+  void paintFacesOn(std::string& meshName, std::string& quantityName,
+                    std::unordered_map<size_t, std::vector<DGtalUint>>& faceMap);
+  void paintSelectedAssociatedAccumulations();
 
+  void mouseEventCallback(ImGuiIO& io);
+  // Mouse functionalities
+  void mouseSelectIndexTest(ImGuiIO& io);
+  void mouseSelectStructure(ImGuiIO& io);
+  // Button functionalities
+  void buttonResetSelectedColorFaces();
+  void buttonResetSelectedColorVoxels();
 
   // Default settings
-  DGtal::Mesh<DGtal::Z3i::RealPoint> defaultMesh{true};
+  std::string defaultRegisteredMeshName{"InputMesh"};
+  std::string defaultOutputFileName{"result.obj"};
+  std::string defaultMeshColorQuantityName{"default faces color"};
+  std::string associatedMeshColorQuantityName{"associated faces color"};
+  float defaultImguiDPIRatio{1.8f};
   PsColor defaultMeshColor{0.8f, 0.8f, 0.8f};
   float defaultMeshTransparency{0.4f};
-  std::string defaultOutputFileName{"result.obj"};
+  float defaultPointTransparency{0.8f};
+  float defaultPointRadius{0.008f};
+  DGtal::Mesh<DGtal::Z3i::RealPoint> defaultMesh{true};
 
   // Operation settings
   size_t clickCount = 0;

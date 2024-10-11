@@ -37,7 +37,7 @@ find_package(Qt5 REQUIRED COMPONENTS Core Widgets OpenGL)
 SET (QGLVIEWER_INCLUDE_DIRS "/usr/include/QGLViewer")
 SET (QGLVIEWER_LIBRARIES  "/usr/local/lib/libQGLViewer-qt5.so")
 #find_package(QGLViewer REQUIRED)
-
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
 # Create an executable
 add_subdirectory(tools)
 add_subdirectory(deps)

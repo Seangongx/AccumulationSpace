@@ -29,25 +29,20 @@
  */
 
 ///////////////////////////////////////////////////////////////////////////////
-#include <chrono> // for timekeeping
-#include <cstddef>
-#include <ctime> // for time display
 #include <fstream>
 #include <iostream>
 // DGtal library
-#include "DGtal/base/Common.h"
 #include "DGtal/helpers/StdDefs.h"
 #include "DGtal/images/ImageContainerBySTLMap.h"
 #include "DGtal/io/colormaps/GradientColorMap.h"
 #include "DGtal/io/colormaps/HueShadeColorMap.h"
 #include "DGtal/io/colormaps/RandomColorMap.h"
-#include "DGtal/io/readers/MeshReader.h"
-#include "DGtal/io/readers/PointListReader.h"
-#include "DGtal/io/writers/MeshWriter.h"
+#include "DGtal/shapes/Mesh.h"
+#include <DGtal/io/readers/MeshReader.h>
+#include <DGtal/io/writers/MeshWriter.h>
 // Other dependencies
-#include "AccVoxel.h"
-#include "AccVoxelHelper.h"
-#include "CLI11.hpp"
+#include "AccumulationSpace.h"
+#include "AccumulationSpace.ipp"
 #include "Menu.h"
 #include "Timer.h"
 
@@ -130,9 +125,17 @@ typedef DGtal::uint32_t Uint;
 typedef DGtal::Z3i::Point Point3D; // Interger 3D point ( Z3i )
 typedef DGtal::PointVector<1, DGtal::int32_t> Point1D;
 typedef DGtal::Mesh<DGtal::Z3i::RealPoint> RealMesh;
+typedef AccumulationSpace::AccumulationVoxel AccVoxel;
 // STD definiations
 typedef map<Uint, AccVoxel> HashMapVoxel; // id mapping to voxels
-typedef priority_queue<int, vector<int>, CompareConfsAsc> Test;
+
+struct CompareAccAsc {
+  bool operator()(const AccVoxel& e1, const AccVoxel& e2) const { return e1.votes < e2.votes; }
+};
+
+struct CompareConfsAsc {
+  bool operator()(const AccVoxel& e1, const AccVoxel& e2) const { return e1.confidenceValue < e2.confidenceValue; }
+};
 
 #pragma endregion
 
@@ -156,7 +159,7 @@ bool isOnBoundary(const Point3D& p, std::pair<Point3D, Point3D> bbox) {
 /// @param queue
 void markNeighbours(const AccVoxel& voxel, HashMapVoxel& mapVoxel, std::queue<AccVoxel>& queue) {
 #ifdef DEBUG
-  cout << "DEBUG: Current center is " << voxel.label << " -> " << voxel.p << endl;
+  cout << "DEBUG: Current center is " << voxel.label << " -> " << voxel.position << endl;
 #endif
   int gridStep = 1;
   std::vector<std::tuple<int, int, int>> neighbors = {{-gridStep, -gridStep, -gridStep},
@@ -188,20 +191,21 @@ void markNeighbours(const AccVoxel& voxel, HashMapVoxel& mapVoxel, std::queue<Ac
 
   for (const auto& [dx, dy, dz] : neighbors) {
     // locate the adjacent voxel id
-    Point3D pTemp(voxel.p[0] + dx, voxel.p[1] + dy, voxel.p[2] + dz);
-    auto idTemp = AccVoxelHelper::accumulationHash(pTemp);
+    Point3D pTemp(voxel.position[0] + dx, voxel.position[1] + dy, voxel.position[2] + dz);
+    auto idTemp = AccumulationSpace::accumulationHash(pTemp);
 
     if (mapKeychecker(mapVoxel, idTemp)) {
       const auto& voxelTemp = mapVoxel.at(idTemp);
       // if (isOnBoundary(pAdjacent, bbox)) // skip the boundary voxel
       //   continue;
-      if (!voxelTemp.visited && pTemp != voxel.p && voxelTemp.label == 0) // skip the visited voxel and the center
+      if (!voxelTemp.visited && pTemp != voxel.position &&
+          voxelTemp.label == 0) // skip the visited voxel and the center
       {
         mapVoxel.at(idTemp).label = voxel.label; // update the current cluster label in global map
         queue.push(mapVoxel.at(idTemp));
 
 #ifdef DEBUG
-        cout << "DEBUG: Label in [" << voxel.label << "] and push " << mapVoxel.at(idTemp).p << endl;
+        cout << "DEBUG: Label in [" << voxel.label << "] and push " << mapVoxel.at(idTemp).position << endl;
 #endif
       }
     }
@@ -227,8 +231,8 @@ void processAccLabel(HashMapVoxel& mapVoxel, TypePQ& globalPQ, Uint& clusterLabe
   // LOOP I: select the next voxel with the highest votes
   while (!globalPQ.empty()) {
     auto vCurrent = globalPQ.top();
-    auto pCurrent = vCurrent.p;
-    auto idCurrent = AccVoxelHelper::accumulationHash(vCurrent.p);
+    auto pCurrent = vCurrent.position;
+    auto idCurrent = AccumulationSpace::accumulationHash(vCurrent.position);
 
     if (mapVoxel.at(idCurrent).visited) {
       globalPQ.pop();
@@ -248,7 +252,7 @@ void processAccLabel(HashMapVoxel& mapVoxel, TypePQ& globalPQ, Uint& clusterLabe
     cluster[clusterLabel].push_back(idCurrent);
 
 #ifdef DEBUG
-    cout << "DEBUG: (" << ++countPush << ") push " << mapVoxel.at(idCurrent).p << " in cluster " << clusterLabel
+    cout << "DEBUG: (" << ++countPush << ") push " << mapVoxel.at(idCurrent).position << " in cluster " << clusterLabel
          << " and set visited" << endl;
     cout << "DEBUG: Current cluster center is " << pCurrent << " -> " << vCurrent.label << endl;
 
@@ -258,8 +262,8 @@ void processAccLabel(HashMapVoxel& mapVoxel, TypePQ& globalPQ, Uint& clusterLabe
     markNeighbours(vCurrent, mapVoxel, localQ);
     while (!localQ.empty()) {
       auto vAdjacent = localQ.front();
-      auto pAdjacent = vAdjacent.p;
-      auto idAdjacent = AccVoxelHelper::accumulationHash(vAdjacent.p);
+      auto pAdjacent = vAdjacent.position;
+      auto idAdjacent = AccumulationSpace::accumulationHash(vAdjacent.position);
 
 #ifdef DEBUG
       cout << "DEBUG: Visiting [" << clusterLabel << "] : " << pAdjacent << endl;
@@ -301,7 +305,7 @@ void processConfLabel(HashMapVoxel& mapVoxel, TypePQ& globalPQ, Uint& clusterLab
   Uint countPush = 0;
 
   for (auto& v : mapVoxel) {
-    if (v.second.confs > theta && v.second.votes > 0) {
+    if (v.second.confidenceValue > theta && v.second.votes > 0) {
       globalPQ.push(v.second);
     } else {
       // label 0 was been igonred
@@ -315,8 +319,8 @@ void processConfLabel(HashMapVoxel& mapVoxel, TypePQ& globalPQ, Uint& clusterLab
   // LOOP I: select the next voxel with the highest votes
   while (!globalPQ.empty()) {
     auto vCurrent = globalPQ.top();
-    auto pCurrent = vCurrent.p;
-    auto idCurrent = AccVoxelHelper::accumulationHash(vCurrent.p);
+    auto pCurrent = vCurrent.position;
+    auto idCurrent = AccumulationSpace::accumulationHash(vCurrent.position);
 
     if (mapVoxel.at(idCurrent).visited) {
       globalPQ.pop();
@@ -336,7 +340,7 @@ void processConfLabel(HashMapVoxel& mapVoxel, TypePQ& globalPQ, Uint& clusterLab
     cluster[clusterLabel].push_back(idCurrent);
 
 #ifdef DEBUG
-    cout << "DEBUG: (" << ++countPush << ") push " << mapVoxel.at(idCurrent).p << " in cluster " << clusterLabel
+    cout << "DEBUG: (" << ++countPush << ") push " << mapVoxel.at(idCurrent).position << " in cluster " << clusterLabel
          << " and set visited" << endl;
     cout << "DEBUG: Current cluster center is " << pCurrent << " -> " << vCurrent.label << endl;
     cout << "DEBUG: Remain(G): " << globalPQ.size() << endl;
@@ -345,8 +349,8 @@ void processConfLabel(HashMapVoxel& mapVoxel, TypePQ& globalPQ, Uint& clusterLab
     markNeighbours(vCurrent, mapVoxel, localQ);
     while (!localQ.empty()) {
       auto vAdjacent = localQ.front();
-      auto pAdjacent = vAdjacent.p;
-      auto idAdjacent = AccVoxelHelper::accumulationHash(vAdjacent.p);
+      auto pAdjacent = vAdjacent.position;
+      auto idAdjacent = AccumulationSpace::accumulationHash(vAdjacent.position);
 
 #ifdef DEBUG
       cout << "DEBUG: Visiting [" << clusterLabel << "] : " << pAdjacent << endl;
@@ -376,7 +380,7 @@ void processConfLabel(HashMapVoxel& mapVoxel, TypePQ& globalPQ, Uint& clusterLab
 }
 
 void computeConfidence(HashMapVoxel& mapVoxel, float theta) {
-  for (auto& [key, voxel] : mapVoxel) voxel.confs /= voxel.votes;
+  for (auto& [key, voxel] : mapVoxel) voxel.confidenceValue /= voxel.votes;
 }
 
 template <typename Shader>
@@ -388,16 +392,16 @@ void shadeFaces(ofstream& fs, HashMapVoxel& mapVoxel, RealMesh& aMesh, Uint clus
 
   for (const auto& [key, voxel] : mapVoxel) {
     if (voxel.label == 0) {
-      cout << "ERROR: " << voxel.p << " is " << voxel.visited << " and no label" << endl;
+      cout << "ERROR: " << voxel.position << " is " << voxel.visited << " and no label" << endl;
       continue;
     }
     Color cTemp = colorMap(voxel.label);
 
     // SDP color
-    fs << voxel.p[0] << " " << voxel.p[1] << " " << voxel.p[2] << " " << int(cTemp.red()) << " " << int(cTemp.green())
-       << " " << int(cTemp.blue()) << " " << endl;
+    fs << voxel.position[0] << " " << voxel.position[1] << " " << voxel.position[2] << " " << int(cTemp.red()) << " "
+       << int(cTemp.green()) << " " << int(cTemp.blue()) << " " << endl;
     // Faces color
-    for (auto f : voxel.faces) {
+    for (auto f : voxel.associatedFaceIds) {
       aMesh.setFaceColor(f, cTemp);
     }
   }
@@ -411,16 +415,16 @@ void outputGradientShader(ofstream& fs, HashMapVoxel& mapVoxel, RealMesh& aMesh,
 
   for (const auto& [key, voxel] : mapVoxel) {
     if (voxel.label == 0) {
-      cout << "ERROR: " << voxel.p << " is " << voxel.visited << " and no label" << endl;
+      cout << "ERROR: " << voxel.position << " is " << voxel.visited << " and no label" << endl;
       continue;
     }
     Color cTemp = cmap_grad(voxel.label);
 
     // SDP color
-    fs << voxel.p[0] << " " << voxel.p[1] << " " << voxel.p[2] << " " << int(cTemp.red()) << " " << int(cTemp.green())
-       << " " << int(cTemp.blue()) << " " << endl;
+    fs << voxel.position[0] << " " << voxel.position[1] << " " << voxel.position[2] << " " << int(cTemp.red()) << " "
+       << int(cTemp.green()) << " " << int(cTemp.blue()) << " " << endl;
     // Faces color
-    for (auto f : voxel.faces) {
+    for (auto f : voxel.associatedFaceIds) {
       aMesh.setFaceColor(f, cTemp);
     }
   }
@@ -432,16 +436,16 @@ void outputHueShader(ofstream& fs, HashMapVoxel& mapVoxel, RealMesh& aMesh, Uint
   for (const auto& [key, voxel] : mapVoxel) {
     if (voxel.label == 0) {
 #ifdef DEBUG
-      cout << "DEBUG: " << voxel.p << " is " << voxel.visited << " and ignored with no label" << endl;
+      cout << "DEBUG: " << voxel.position << " is " << voxel.visited << " and ignored with no label" << endl;
 #endif
       continue;
     }
     Color cTemp = aColorMap(voxel.label);
     // SDP color
-    fs << voxel.p[0] << " " << voxel.p[1] << " " << voxel.p[2] << " " << int(cTemp.red()) << " " << int(cTemp.green())
-       << " " << int(cTemp.blue()) << endl;
+    fs << voxel.position[0] << " " << voxel.position[1] << " " << voxel.position[2] << " " << int(cTemp.red()) << " "
+       << int(cTemp.green()) << " " << int(cTemp.blue()) << endl;
     // Faces color
-    for (auto f : voxel.faces) {
+    for (auto f : voxel.associatedFaceIds) {
       aMesh.setFaceColor(f, cTemp);
     }
   }
@@ -459,16 +463,16 @@ void outputRandomShader(ofstream& fs, HashMapVoxel& mapVoxel, RealMesh& aMesh, U
   for (auto v : mapVoxel) {
     if (mapVoxel.at(v.first).label == 0) {
 #ifdef DEBUG
-      cout << "DEBUG: " << v.second.p << " is " << v.second.visited << " and igonred with no label" << endl;
+      cout << "DEBUG: " << v.second.position << " is " << v.second.visited << " and igonred with no label" << endl;
 #endif
       continue;
     }
     Color cTemp = aColorMap(mapVoxel.at(v.first).label);
     // SDP color
-    fs << v.second.p[0] << " " << v.second.p[1] << " " << v.second.p[2] << " " << int(cTemp.red()) << " "
-       << int(cTemp.green()) << " " << int(cTemp.blue()) << " " << endl;
+    fs << v.second.position[0] << " " << v.second.position[1] << " " << v.second.position[2] << " " << int(cTemp.red())
+       << " " << int(cTemp.green()) << " " << int(cTemp.blue()) << " " << endl;
     // Faces color
-    for (auto f : v.second.faces) {
+    for (auto f : v.second.associatedFaceIds) {
       aMesh.setFaceColor(f, cTemp);
     }
   }
@@ -523,9 +527,9 @@ int main(int argc, char** argv) {
 
   // 1) Map creation
   HashMapVoxel mapVoxel;
-  vector<AccVoxel> voxelList = AccVoxelHelper::getAccVoxelsFromFile(appMenu.extraData);
-  for (auto& v : voxelList) {
-    KeyType hashValue = AccVoxelHelper::accumulationHash(v.p);
+  AccumulationSpace::NormalAccumulationSpace nas(appMenu.extraData, AccumulationSpace::LogLevel::INFO);
+  for (auto& v : nas.voxelList) {
+    auto hashValue = AccumulationSpace::accumulationHash(v.position);
     mapVoxel[hashValue] = v;
   }
 

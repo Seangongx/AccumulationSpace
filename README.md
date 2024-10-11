@@ -11,7 +11,7 @@
 
 You will obtain the following display: 
 
-<img width="868" alt="Interface" src="https://github.com/kerautret/ExpeAccSegment/samples/Interface.png">
+![polyAccEdit Interface](https://github.com/Seangongx/AccumulationSpace/blob/main/samples/Interface.png)
 
 ## Miscellaneous
 

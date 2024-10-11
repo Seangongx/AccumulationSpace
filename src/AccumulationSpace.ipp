@@ -1,4 +1,5 @@
 #include "AccumulationSpace.h"
+#include "DGtal/io/readers/PointListReader.h"
 #include "Timer.h"
 
 namespace AccumulationSpace {

@@ -4,7 +4,7 @@ SET (AS_COMMANDS
   meshViewer
 )
 SET (AS_TOOLS
-  polyMeshEdit
+  polyAccEdit
 )
 
 FOREACH(FILE ${AS_COMMANDS})
