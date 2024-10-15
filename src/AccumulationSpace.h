@@ -56,17 +56,13 @@ class AccumulationLog {
 public:
   AccumulationLog();
   AccumulationLog(std::shared_ptr<std::fstream> fstream);
-  AccumulationLog(std::shared_ptr<std::fstream> fstream, LogLevel ll);
-  AccumulationLog(std::shared_ptr<std::fstream> fstream, LogLevel ll, const std::string& logFileName);
+  AccumulationLog(LogLevel ll, std::shared_ptr<std::fstream> fstream);
+  AccumulationLog(const std::string& logFileName, LogLevel ll, std::shared_ptr<std::fstream> fstream);
   ~AccumulationLog();
-  void init(std::shared_ptr<std::fstream> fstream, const std::string& logFileName, LogLevel ll);
-
+  void init(const std::string& logFileName, LogLevel ll, std::shared_ptr<std::fstream> fstream);
+  // template function
   template <typename... Args>
   void add(LogLevel level, Args&&... args);
-
-  std::shared_ptr<std::fstream> logFile;
-  std::string fileName = "AccumulationSpaceLog.txt";
-  LogLevel level = LogLevel::INFO;
 
 private:
   template <typename T>
@@ -75,6 +71,10 @@ private:
   void appendToStream(std::ostringstream& oss, T&& first, Args&&... args);
   template <typename... Args>
   std::string addLogMessage(Args&&... args);
+  // private member
+  std::shared_ptr<std::fstream> filePtr;
+  std::string fileName = "AccumulationLog.txt";
+  LogLevel level = LogLevel::INFO;
 };
 
 ///////////////////////////////////////////////////////////////////////////////

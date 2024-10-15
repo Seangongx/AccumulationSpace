@@ -21,26 +21,25 @@ std::string logLevelToString(LogLevel level) {
 }
 
 // AccumulationLog
-AccumulationLog::AccumulationLog() {}
-AccumulationLog::AccumulationLog(std::shared_ptr<std::fstream> fstream) : logFile(fstream) {
-  init(fstream, fileName, LogLevel::INFO);
+AccumulationLog::AccumulationLog() {
+  auto fstream = std::make_shared<std::fstream>(fileName, std::ios::out | std::ios::app);
+  init(fileName, level, fstream);
 }
-AccumulationLog::AccumulationLog(std::shared_ptr<std::fstream> fstream, LogLevel ll) : logFile(fstream) {
-  init(fstream, fileName, ll);
-}
-AccumulationLog::AccumulationLog(std::shared_ptr<std::fstream> fstream, LogLevel ll, const std::string& logFileName)
-    : logFile(fstream) {
-  init(fstream, logFileName, ll);
+AccumulationLog::AccumulationLog(std::shared_ptr<std::fstream> fstream) { init(fileName, LogLevel::INFO, fstream); }
+AccumulationLog::AccumulationLog(LogLevel ll, std::shared_ptr<std::fstream> fstream) { init(fileName, ll, fstream); }
+AccumulationLog::AccumulationLog(const std::string& logFileName, LogLevel ll, std::shared_ptr<std::fstream> fstream) {
+  init(logFileName, ll, fstream);
 }
 AccumulationLog::~AccumulationLog() {
-  if (logFile && logFile->is_open()) {
+  if ((*filePtr) && filePtr->is_open()) {
     add(LogLevel::INFO, "Log file closed at ", Timer::now());
-    logFile->close();
+    filePtr->close();
   }
 }
-void AccumulationLog::init(std::shared_ptr<std::fstream> fstream, const std::string& logFileName, LogLevel ll) {
+void AccumulationLog::init(const std::string& logFileName, LogLevel ll, std::shared_ptr<std::fstream> fstream) {
   level = ll;
-  if (!fstream) {
+  filePtr = fstream;
+  if (!(*filePtr) || !filePtr->is_open()) {
     std::cerr << "Unable to open log file: " << logFileName << std::endl;
     add(LogLevel::ERROR, "Unable to open log file: ", logFileName, " at ", Timer::now());
   } else {
@@ -51,7 +50,7 @@ void AccumulationLog::init(std::shared_ptr<std::fstream> fstream, const std::str
 template <typename... Args>
 void AccumulationLog::add(LogLevel ll, Args&&... args) {
   if (ll >= level) {
-    (*logFile) << addLogMessage(logLevelToString(ll), ": ", std::forward<Args>(args)...) << std::endl;
+    (*filePtr) << addLogMessage(logLevelToString(ll), ": ", std::forward<Args>(args)...) << std::endl;
   }
 }
 // Helper function to append log messages

@@ -13,16 +13,10 @@
 
 namespace PolyscopeEnvironment {
 
-Manager::Manager(const std::string& meshFile, const std::string& accFile, std::shared_ptr<std::fstream> logFileStream,
-                 LogLevel level, const std::string& logFileName) {
-  if (logFileName == "TestLog.txt") {
-    // logFileStream->open();
-    polyscopeLog = std::move(std::make_shared<AccumulationLog>(logFileStream, level, defaultLogFileName));
-  } else {
-    polyscopeLog = std::move(std::make_shared<AccumulationLog>(logFileStream, level, logFileName));
-  }
-  nas = std::move(NormalAccumulationSpace(accFile, polyscopeLog));
-  nas.log->add(LogLevel::INFO, "PolyscopeEnvironment startup ", Timer::now());
+Manager::Manager(const std::string& meshFile, const std::string& accFile, std::shared_ptr<AccumulationLog> logPtr) {
+  log = logPtr;
+  nas = std::move(NormalAccumulationSpace(accFile, log));
+  log->add(LogLevel::INFO, "PolyscopeEnvironment startup ", Timer::now());
   // Initialize polyscope
   polyscope::options::programName = "PolyAccEditAlgo - (DGtalToolsContrib) " + Timer::now();
   polyscope::init();
@@ -55,7 +49,7 @@ Manager::Manager(const std::string& meshFile, const std::string& accFile, std::s
 // Visualize accumulation set in space
 void Manager::addPointCloud(const std::string& structName, PointLists& structPoints, double structRadius) {
   if (nas.voxelList.size() != nas.pointList.size()) {
-    nas.log->add(LogLevel::ERROR, "Error: voxelList and pointList size mismatch");
+    log->add(LogLevel::ERROR, "Error: voxelList and pointList size mismatch");
     return;
   }
 
@@ -96,10 +90,10 @@ void Manager::storeSelectedAssociatedFacesInMap() {
   if (voxelId < 0 || static_cast<size_t>(voxelId) >= nas.voxelList.size()) {
     promptText = "ERROR: Current voxel " + std::to_string(selectedElementId) +
                  " in storeSelectedAssociatedFacesInList() is not found";
-    nas.log->add(LogLevel::ERROR,
-                 "ERROR: Current voxel " + std::to_string(selectedElementId) +
-                     " in storeSelectedAssociatedFacesInList() is not found ",
-                 Timer::now());
+    log->add(LogLevel::ERROR,
+             "ERROR: Current voxel " + std::to_string(selectedElementId) +
+                 " in storeSelectedAssociatedFacesInList() is not found ",
+             Timer::now());
     return;
   }
   for (auto faceId : nas.voxelList[voxelId].associatedFaceIds) {
@@ -119,7 +113,7 @@ void Manager::paintFacesOn(std::string& meshName, std::string& quantityName,
   auto& usedColorMap = polyscope::render::engine->getColorMap("turbo");
   auto tempMinMax = AccumulationSpace::getMinMaxVotesCountFrom(nas.voxelList);
   // Retrive the color value from the color map
-  nas.log->add(LogLevel::DEBUG, "In " + quantityName + " Map size: ", faceMap.size());
+  log->add(LogLevel::DEBUG, "In " + quantityName + " Map size: ", faceMap.size());
 
   // Second loop indicate that not only one voxel is mapped to a face (not vice versa)
   for (auto f : faceMap) {
@@ -143,10 +137,10 @@ void Manager::findLoadedAssociatedAccumulationsByFaceId() {
   if (faceId < 0 || it == globalFaceMap.end()) {
     promptText = "ERROR: Current face " + std::to_string(selectedElementId) +
                  " is not found in findLoadedAssociatedAccumulationsByFaceId() ";
-    nas.log->add(LogLevel::DEBUG,
-                 "Current face " + std::to_string(selectedElementId) +
-                     " is not found in findLoadedAssociatedAccumulationsByFaceId() ",
-                 Timer::now());
+    log->add(LogLevel::DEBUG,
+             "Current face " + std::to_string(selectedElementId) +
+                 " is not found in findLoadedAssociatedAccumulationsByFaceId() ",
+             Timer::now());
     return;
   }
   for (auto l : it->second) {
@@ -234,7 +228,7 @@ void Manager::setImguiCustomPanel() {
 size_t Manager::convertMeshElementIdInPolyscope(size_t elementId) {
   if (elementId < 0) {
     promptText = "ERROR: In convertMeshElementIdInPolyscope() element < 0";
-    nas.log->add(LogLevel::ERROR, "ERROR: In convertMeshElementIdInPolyscope() element < 0 ", Timer::now());
+    log->add(LogLevel::ERROR, "ERROR: In convertMeshElementIdInPolyscope() element < 0 ", Timer::now());
     return static_cast<size_t>(-1);
   }
   auto facePickIndStart = currentPolysurf.nbVertices();
@@ -260,10 +254,10 @@ void Manager::paintSelectedAssociatedAccumulations() {
   for (auto accId : associatedAccumulationIds) {
     selectedAssociatedPoints.push_back(nas.pointList[accId]);
     vScalar.push_back(accmulationScalarValues[accId]);
-    nas.log->add(LogLevel::DEBUG, accId, " face and accumulation is ", accmulationScalarValues[accId]);
+    log->add(LogLevel::DEBUG, accId, " face and accumulation is ", accmulationScalarValues[accId]);
   }
 
-  nas.log->add(LogLevel::DEBUG, associatedAccumulationIds.size(), " voxels selected ", Timer::now());
+  log->add(LogLevel::DEBUG, associatedAccumulationIds.size(), " voxels selected ", Timer::now());
   // paint selected voxels
   polyscope::PointCloud* tempPointCloud =
       polyscope::registerPointCloud("Selected Associated Voxels", selectedAssociatedPoints);
@@ -286,7 +280,7 @@ void Manager::mouseSelectStructureEvent(ImGuiIO& io) {
     if (io.MouseDoubleClicked[0]) {
       if (selection.second < 0) {
         promptText = "ERROR: In mouseSelectAccumulation() selection.second < 0";
-        nas.log->add(LogLevel::ERROR, "ERROR: In mouseSelectAccumulation() selection.second < 0 ", Timer::now());
+        log->add(LogLevel::ERROR, "ERROR: In mouseSelectAccumulation() selection.second < 0 ", Timer::now());
         return;
       }
       if (selection.first->typeName() == "Point Cloud") {
@@ -336,7 +330,7 @@ void Manager::buildHashMap2Voxels() {
   for (auto voxel : nas.voxelList) {
     globalHashMap[AccumulationSpace::accumulationHash(voxel.position)] = voxel;
   }
-  nas.log->add(LogLevel::INFO, "Finished building HashMap size: ", globalHashMap.size());
+  log->add(LogLevel::INFO, "Finished building HashMap size: ", globalHashMap.size());
 }
 void Manager::buildFaceMap2Voxels() {
   for (size_t i = 0; i < nas.voxelList.size(); i++) {
@@ -345,7 +339,7 @@ void Manager::buildFaceMap2Voxels() {
       globalFaceMap[faceId].push_back(i);
     }
   }
-  nas.log->add(LogLevel::INFO, "Finished building Facemap size: ", globalFaceMap.size());
+  log->add(LogLevel::INFO, "Finished building Facemap size: ", globalFaceMap.size());
 }
 
 } // namespace PolyscopeEnvironment

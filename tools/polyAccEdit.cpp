@@ -102,13 +102,13 @@ int main(int argc, char** argv) {
   app.get_formatter()->column_width(40);
   CLI11_PARSE(app, argc, argv);
 
-  // Build environment
-  auto logFileStream = std::make_shared<std::fstream>(defaultLogFile, std::ios::out | std::ios::trunc);
-  if (!logFileStream->is_open()) {
-    std::cerr << "Failed to open log file: " << defaultLogFile << std::endl;
-    return -1;
-  }
-  PolyscopeEnvironment::Manager psManager{defaultMeshFile, defaultAccFile, logFileStream, logLevel, defaultLogFile};
+  // Initialize log file
+  auto globalLogFileStream = std::make_shared<std::fstream>(defaultLogFile, std::ios::out | std::ios::trunc);
+  AccumulationSpace::AccumulationLog defaultLog(defaultLogFile, logLevel, globalLogFileStream);
+  // Initialize polyscope environment
+  std::shared_ptr<AccumulationSpace::AccumulationLog> defaultLogPtr =
+      std::make_shared<AccumulationSpace::AccumulationLog>(defaultLog);
+  PolyscopeEnvironment::Manager psManager{defaultMeshFile, defaultAccFile, defaultLogPtr};
 
   return 0;
 }
