@@ -16,6 +16,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 #include <cstddef>
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -54,18 +55,20 @@ size_t accumulationHash(DGtalPoint3D pos);
 class AccumulationLog {
 public:
   AccumulationLog();
-  AccumulationLog(LogLevel level);
-  AccumulationLog(const std::string& logFileName, LogLevel ll);
+  AccumulationLog(std::shared_ptr<std::fstream> fstream);
+  AccumulationLog(std::shared_ptr<std::fstream> fstream, LogLevel ll);
+  AccumulationLog(std::shared_ptr<std::fstream> fstream, LogLevel ll, const std::string& logFileName);
   ~AccumulationLog();
+  void init(std::shared_ptr<std::fstream> fstream, const std::string& logFileName, LogLevel ll);
 
   template <typename... Args>
   void add(LogLevel level, Args&&... args);
 
-private:
-  std::ofstream logFile;
-  std::string logFileName;
-  LogLevel level;
+  std::shared_ptr<std::fstream> logFile;
+  std::string fileName = "AccumulationSpaceLog.txt";
+  LogLevel level = LogLevel::INFO;
 
+private:
   template <typename T>
   void appendToStream(std::ostringstream& oss, T&& arg);
   template <typename T, typename... Args>
@@ -106,7 +109,9 @@ public:
 class NormalAccumulationSpace {
 public:
   NormalAccumulationSpace();
-  NormalAccumulationSpace(const std::string& inputFileName, AccumulationSpace::LogLevel ll);
+  // NormalAccumulationSpace(const NormalAccumulationSpace& other);
+  NormalAccumulationSpace(std::shared_ptr<AccumulationLog> logPtr);
+  NormalAccumulationSpace(const std::string& inputFileName, std::shared_ptr<AccumulationLog> logPtr);
   ~NormalAccumulationSpace(){};
 
   void buildFromFile(const std::string& inputFileName);
@@ -115,7 +120,7 @@ public:
   std::vector<GLMPoint3D> pointList;
   std::pair<size_t, size_t> rangeVoteValue;
   std::pair<size_t, size_t> rangeFaceCount;
-  AccumulationLog acclog;
+  std::shared_ptr<AccumulationLog> log;
 
 private:
   /// @brief Read **extracted file from CDCVAM** includes accumulation and

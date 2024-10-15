@@ -17,6 +17,8 @@
 #include <string>
 #include <vector>
 ////////////////////////////////////////////////////////////////////////////////
+// #include "AccumulationAlgorithms.h"
+// #include "AccumulationAlgorithms.ipp"
 #include "AccumulationSpace.h"
 #include "AccumulationSpace.ipp"
 #include "DGtal/shapes/Mesh.h"
@@ -28,6 +30,7 @@ namespace PolyscopeEnvironment {
 
 typedef DGtal::PolygonalSurface<DGtal::Z3i::RealPoint> PolySurface;
 typedef AccumulationSpace::DGtalUint DGtalUint;
+typedef AccumulationSpace::AccumulationLog AccumulationLog;
 typedef AccumulationSpace::AccumulationVoxel AccVoxel;
 typedef AccumulationSpace::NormalAccumulationSpace NormalAccumulationSpace;
 typedef AccumulationSpace::LogLevel LogLevel;
@@ -39,8 +42,8 @@ typedef std::vector<PsPoint3D> PointLists;
 // Manager class for Polyscope environment settings
 class Manager {
 public:
-  Manager(){};
-  Manager(const std::string& meshFile, const std::string& accFile, AccumulationSpace::LogLevel logLevel);
+  Manager(const std::string& meshFile, const std::string& accFile, std::shared_ptr<std::fstream> logFileStream,
+          LogLevel level, const std::string& logFileName);
   ~Manager(){};
 
   void init(const NormalAccumulationSpace& nas);
@@ -78,32 +81,34 @@ public:
 private:
   size_t convertMeshElementIdInPolyscope(size_t elementId);
   void findLoadedAssociatedAccumulationsByFaceId();
-  void storeSelectedAssociatedFacesInList();
+  void storeSelectedAssociatedFacesInMap();
   void paintFacesOn(std::string& meshName, std::string& quantityName,
                     std::unordered_map<size_t, std::vector<DGtalUint>>& faceMap);
   void paintSelectedAssociatedAccumulations();
 
+  // event functions
   void mouseEventCallback(ImGuiIO& io);
-  // Mouse functionalities
-  void mouseSelectIndexTest(ImGuiIO& io);
-  void mouseSelectStructure(ImGuiIO& io);
-  // Button functionalities
-  void buttonResetSelectedColorFaces();
-  void buttonResetSelectedColorVoxels();
+  void mouseSelectStructureEvent(ImGuiIO& io);
+  void mouseDragSliderEvent(int& step);
+  void buttonResetSelectedColorFacesEvent();
+  void buttonResetSelectedColorVoxelsEvent();
 
   // Default settings
   std::string defaultRegisteredMeshName{"InputMesh"};
   std::string defaultOutputFileName{"result.obj"};
   std::string defaultMeshColorQuantityName{"default faces color"};
   std::string associatedMeshColorQuantityName{"associated faces color"};
+  std::string defaultLogFileName{"PolyscopeEnvironmentLog.txt"};
   float defaultImguiDPIRatio{1.8f};
   PsColor defaultMeshColor{0.8f, 0.8f, 0.8f};
   float defaultMeshTransparency{0.4f};
   float defaultPointTransparency{0.8f};
   float defaultPointRadius{0.008f};
   DGtal::Mesh<DGtal::Z3i::RealPoint> defaultMesh{true};
+  std::shared_ptr<AccumulationLog> polyscopeLog;
 
   // Operation settings
+  int imguiAlgoStep = 0;
   size_t clickCount = 0;
   size_t selectedElementId = 0;
   std::set<size_t> associatedAccumulationIds;
@@ -116,7 +121,8 @@ private:
   std::vector<double> accmulationScalarValues;
   std::unordered_map<size_t, AccVoxel> globalHashMap;
   std::unordered_map<size_t, std::vector<DGtalUint>> globalFaceMap;
-  AccumulationSpace::NormalAccumulationSpace nas;
+  NormalAccumulationSpace nas;
+  // AccumulationAlgorithms::SimpleCluster sc;
 };
 
 

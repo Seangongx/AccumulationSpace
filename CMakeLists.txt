@@ -18,6 +18,8 @@ SET(AS_COMMAND_SRC
     ${PROJECT_SOURCE_DIR}/src/NormalAccumulator.cpp
 )
 SET(AS_TOOLS_SRC 
+    #{PROJECT_SOURCE_DIR}/src/AccumulationAlgorithms.h
+    #${PROJECT_SOURCE_DIR}/src/AccumulationAlgorithms.ipp
     ${PROJECT_SOURCE_DIR}/src/AccumulationSpace.h
     ${PROJECT_SOURCE_DIR}/src/AccumulationSpace.ipp
     ${PROJECT_SOURCE_DIR}/src/PolyscopeEnvironment.h

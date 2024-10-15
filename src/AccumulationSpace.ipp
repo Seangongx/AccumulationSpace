@@ -21,44 +21,37 @@ std::string logLevelToString(LogLevel level) {
 }
 
 // AccumulationLog
-AccumulationLog::AccumulationLog() : level(LogLevel::INFO), logFileName("AccumuationSpaceLog.txt") {
-  logFile.open(logFileName, std::ios::out | std::ios::trunc);
-  if (!logFile) {
-    std::cerr << "Unable to open log file: " << logFileName << std::endl;
-    add(LogLevel::ERROR, "Unable to open log file: ", logFileName, " at ", Timer::now());
-  } else {
-    add(LogLevel::INFO, "Log file opened successfully.", Timer::now());
-  }
+AccumulationLog::AccumulationLog() {}
+AccumulationLog::AccumulationLog(std::shared_ptr<std::fstream> fstream) : logFile(fstream) {
+  init(fstream, fileName, LogLevel::INFO);
 }
-AccumulationLog::AccumulationLog(LogLevel ll) : level(ll), logFileName("AccumuationSpaceLog.txt") {
-  logFile.open(logFileName, std::ios::out | std::ios::trunc);
-  if (!logFile) {
-    std::cerr << "Unable to open log file: " << logFileName << std::endl;
-    add(LogLevel::ERROR, "Unable to open log file: ", logFileName, " at ", Timer::now());
-  } else {
-    add(LogLevel::INFO, "Log file opened successfully.", Timer::now());
-  }
+AccumulationLog::AccumulationLog(std::shared_ptr<std::fstream> fstream, LogLevel ll) : logFile(fstream) {
+  init(fstream, fileName, ll);
 }
-AccumulationLog::AccumulationLog(const std::string& logFileName, LogLevel ll) : logFileName(logFileName), level(ll) {
-  logFile.open(logFileName, std::ios::out | std::ios::trunc);
-  if (!logFile) {
-    std::cerr << "Unable to open log file: " << logFileName << std::endl;
-    add(LogLevel::ERROR, "Unable to open log file: ", logFileName, " at ", Timer::now());
-  } else {
-    add(LogLevel::INFO, "Log file opened successfully at", Timer::now());
-  }
+AccumulationLog::AccumulationLog(std::shared_ptr<std::fstream> fstream, LogLevel ll, const std::string& logFileName)
+    : logFile(fstream) {
+  init(fstream, logFileName, ll);
 }
 AccumulationLog::~AccumulationLog() {
-  if (logFile.is_open()) {
+  if (logFile && logFile->is_open()) {
     add(LogLevel::INFO, "Log file closed at ", Timer::now());
-    logFile.close();
+    logFile->close();
+  }
+}
+void AccumulationLog::init(std::shared_ptr<std::fstream> fstream, const std::string& logFileName, LogLevel ll) {
+  level = ll;
+  if (!fstream) {
+    std::cerr << "Unable to open log file: " << logFileName << std::endl;
+    add(LogLevel::ERROR, "Unable to open log file: ", logFileName, " at ", Timer::now());
+  } else {
+    add(LogLevel::INFO, "Log file opened successfully.", Timer::now());
   }
 }
 // No need for endl
 template <typename... Args>
 void AccumulationLog::add(LogLevel ll, Args&&... args) {
   if (ll >= level) {
-    logFile << addLogMessage(logLevelToString(ll), ": ", std::forward<Args>(args)...) << std::endl;
+    (*logFile) << addLogMessage(logLevelToString(ll), ": ", std::forward<Args>(args)...) << std::endl;
   }
 }
 // Helper function to append log messages
@@ -88,25 +81,37 @@ AccumulationVoxel::AccumulationVoxel() {
 }
 
 // NormalAccumulationSpace
-NormalAccumulationSpace::NormalAccumulationSpace() : acclog(LogLevel::INFO) {
+NormalAccumulationSpace::NormalAccumulationSpace() {
   rangeVoteValue = std::make_pair(0, 0);
   rangeFaceCount = std::make_pair(0, 0);
 }
-NormalAccumulationSpace::NormalAccumulationSpace(const std::string& inputFileName, AccumulationSpace::LogLevel ll)
-    : acclog(ll) {
+// NormalAccumulationSpace::NormalAccumulationSpace(const NormalAccumulationSpace& other) {
+//   voxelList = other.voxelList;
+//   pointList = other.pointList;
+//   rangeVoteValue = other.rangeVoteValue;
+//   rangeFaceCount = other.rangeFaceCount;
+//   auto logStream = std::make_shared<std::fstream>(other.log.fileName, std::ios::out | std::ios::app);
+//   log.init(other.log.logFile, other.log.fileName, other.log.level);
+// }
+NormalAccumulationSpace::NormalAccumulationSpace(std::shared_ptr<AccumulationLog> logPtr) : log(logPtr) {
+  rangeVoteValue = std::make_pair(0, 0);
+  rangeFaceCount = std::make_pair(0, 0);
+}
+NormalAccumulationSpace::NormalAccumulationSpace(const std::string& inputFileName,
+                                                 std::shared_ptr<AccumulationLog> logPtr)
+    : log(logPtr) {
   buildFromFile(inputFileName);
-};
+}
 void NormalAccumulationSpace::buildFromFile(const std::string& inputFileName) {
-  acclog.add(LogLevel::INFO, "Initiate Nomral Accumulation Space(NAS) from ", inputFileName);
+  log->add(LogLevel::INFO, "Initiate Nomral Accumulation Space(NAS) from ", inputFileName);
 
   getVoxelListFromFile(inputFileName);
   getPointsFromVoxelList();
   rangeVoteValue = AccumulationSpace::getMinMaxVotesCountFrom(voxelList);
   rangeFaceCount = AccumulationSpace::getMinMaxFacesCountFrom(voxelList);
-  acclog.add(LogLevel::INFO, "Finished building Nomral Accumulation Space(NAS)");
+  log->add(LogLevel::INFO, "Finished building Nomral Accumulation Space(NAS)");
 }
 void NormalAccumulationSpace::getVoxelListFromFile(const std::string& filename) {
-
   auto vOrigins = DGtal::PointListReader<Row>::getPolygonsFromFile(filename);
   for (auto l : vOrigins) {
     if (l.size() > 4) {
@@ -123,20 +128,22 @@ void NormalAccumulationSpace::getVoxelListFromFile(const std::string& filename) 
         oss << f << " ";
       }
 
-      acclog.add(LogLevel::DEBUG, "<", typeid(*this).name(), ">", oss.str());
+      log->add(LogLevel::DEBUG, "<", typeid(*this).name(), log, ">", oss.str());
     }
   }
+  log->add(LogLevel::INFO, "Finished reading voxel list from ", filename);
 }
 void NormalAccumulationSpace::getPointsFromVoxelList() {
   for (AccumulationVoxel v : voxelList) {
     pointList.push_back(GLMPoint3D{v.position[0], v.position[1], v.position[2]});
   }
+  log->add(LogLevel::INFO, "Finished converting voxel list to point list");
 }
 
 // Min/max functions for AccumulationVoxel votes
 std::pair<size_t, size_t> getMinMaxVotesCountFrom(const std::vector<AccumulationVoxel>& accList) {
   if (accList.empty()) {
-    throw std::runtime_error("The vector is empty");
+    throw std::runtime_error("The accumulation list is empty");
   }
 
   auto minElem =
@@ -151,7 +158,7 @@ std::pair<size_t, size_t> getMinMaxVotesCountFrom(const std::vector<Accumulation
 
 std::pair<size_t, size_t> getMinMaxFacesCountFrom(const std::vector<AccumulationVoxel>& accList) {
   if (accList.empty()) {
-    throw std::runtime_error("The vector is empty");
+    throw std::runtime_error("The accumulation list is empty");
   }
 
   auto faceSize = [](const AccumulationVoxel& accV) { return accV.associatedFaceIds.size(); };
