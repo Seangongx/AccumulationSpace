@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
 
   std::string defaultMeshFile{""};
   std::string defaultAccFile{""};
-  std::string defaultLogFile{"TestEnv.log"};
+  std::string defaultLogFile{"TestLog.txt"};
   AccumulationSpace::LogLevel logLevel = AccumulationSpace::LogLevel::INFO;
 
   // parse command line using CLI ----------------------------------------------
@@ -97,13 +97,17 @@ int main(int argc, char** argv) {
       ->check(CLI::ExistingFile);
   app.add_option("-a,--inputAcc,2", defaultAccFile, "an input accumulation file in .dat format.", true);
   app.add_option("-l,--logLevel,3", logLevel, "0: DEBUG, 1: INFO, 2: WARNING, 3: ERROR", true);
-  app.add_option("-l,--logName,4", defaultLogFile, "the log file name", true);
+  app.add_option("-m,--logName,4", defaultLogFile, "the log file name", true);
 
   app.get_formatter()->column_width(40);
   CLI11_PARSE(app, argc, argv);
 
   // Build environment
   auto logFileStream = std::make_shared<std::fstream>(defaultLogFile, std::ios::out | std::ios::trunc);
+  if (!logFileStream->is_open()) {
+    std::cerr << "Failed to open log file: " << defaultLogFile << std::endl;
+    return -1;
+  }
   PolyscopeEnvironment::Manager psManager{defaultMeshFile, defaultAccFile, logFileStream, logLevel, defaultLogFile};
 
   return 0;

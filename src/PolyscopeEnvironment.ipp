@@ -14,10 +14,15 @@
 namespace PolyscopeEnvironment {
 
 Manager::Manager(const std::string& meshFile, const std::string& accFile, std::shared_ptr<std::fstream> logFileStream,
-                 LogLevel level, const std::string& logFileName)
-    : polyscopeLog(std::make_shared<AccumulationLog>(logFileStream, level, logFileName)), nas(accFile, polyscopeLog) {
-  // nas.log.add("PolyscopeEnvironment startup"), LogLevel::INFO, Timer::now());
-
+                 LogLevel level, const std::string& logFileName) {
+  if (logFileName == "TestLog.txt") {
+    // logFileStream->open();
+    polyscopeLog = std::move(std::make_shared<AccumulationLog>(logFileStream, level, defaultLogFileName));
+  } else {
+    polyscopeLog = std::move(std::make_shared<AccumulationLog>(logFileStream, level, logFileName));
+  }
+  nas = std::move(NormalAccumulationSpace(accFile, polyscopeLog));
+  nas.log->add(LogLevel::INFO, "PolyscopeEnvironment startup ", Timer::now());
   // Initialize polyscope
   polyscope::options::programName = "PolyAccEditAlgo - (DGtalToolsContrib) " + Timer::now();
   polyscope::init();
@@ -136,7 +141,7 @@ void Manager::findLoadedAssociatedAccumulationsByFaceId() {
   auto faceId = selectedElementId;
   auto it = globalFaceMap.find(faceId);
   if (faceId < 0 || it == globalFaceMap.end()) {
-    promptText = "\nERROR: Current face " + std::to_string(selectedElementId) +
+    promptText = "ERROR: Current face " + std::to_string(selectedElementId) +
                  " is not found in findLoadedAssociatedAccumulationsByFaceId() ";
     nas.log->add(LogLevel::DEBUG,
                  "Current face " + std::to_string(selectedElementId) +
@@ -331,7 +336,7 @@ void Manager::buildHashMap2Voxels() {
   for (auto voxel : nas.voxelList) {
     globalHashMap[AccumulationSpace::accumulationHash(voxel.position)] = voxel;
   }
-  nas.log->add(LogLevel::INFO, "HashMap Finished size: ", globalHashMap.size());
+  nas.log->add(LogLevel::INFO, "Finished building HashMap size: ", globalHashMap.size());
 }
 void Manager::buildFaceMap2Voxels() {
   for (size_t i = 0; i < nas.voxelList.size(); i++) {
@@ -340,7 +345,7 @@ void Manager::buildFaceMap2Voxels() {
       globalFaceMap[faceId].push_back(i);
     }
   }
-  nas.log->add(LogLevel::INFO, "Face Finished size: ", globalFaceMap.size());
+  nas.log->add(LogLevel::INFO, "Finished building Facemap size: ", globalFaceMap.size());
 }
 
 } // namespace PolyscopeEnvironment
