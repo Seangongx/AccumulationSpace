@@ -21,7 +21,12 @@ public:
 
   void print() const {
     std::cout << m_name << " took " << m_duration.count() << " seconds (" << m_duration.count() * 1000.0
-              << " milliseconds)\n";
+              << " milliseconds)";
+  }
+
+  std::string log() const {
+    return m_name + " took " + std::to_string(m_duration.count()) + " seconds (" +
+           std::to_string(m_duration.count() * 1000.0) + " milliseconds)";
   }
 
   static std::string now() {

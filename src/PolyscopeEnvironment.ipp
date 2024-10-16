@@ -209,15 +209,25 @@ void Manager::setImguiCustomPanel() {
   }
   ImGui::SameLine();
   // thrid line
-  if (ImGui::Button(accBtnPressed4 ? "Hide incident ray" : "Show incident ray")) {
+  if (ImGui::Button(accBtnPressed3 ? "Hide incident ray" : "Show incident ray")) {
     // check face selected
     // currentCachedPointCloud(accumulation voxel) updace
-    accBtnPressed4 = false;
-  } else {
-    accBtnPressed4 = true;
+    if (accBtnPressed3) {
+
+    } else {
+    }
+    accBtnPressed3 = !accBtnPressed3;
   }
 
   ImGui::Text("Cluster algorithm manipulation");
+  if (ImGui::Button(accBtnPressed4 ? "Show clusters" : "Hide clusters")) {
+    if (accBtnPressed4) {
+      sc.buildCluster(nas.voxelList, 0, 0.0, log);
+      paintClusterFacesVoxels(sc.mapVoxel, sc.clusterLabel);
+    } else {
+    }
+    accBtnPressed4 = !accBtnPressed4;
+  }
   if (ImGui::SliderInt("Traverse step", &imguiAlgoStep, 0, 20)) {
     // sc.buildCluster(nas.voxelList, imguiAlgoStep, 0.0);
     promptText = "Traverse step: " + std::to_string(imguiAlgoStep);
@@ -271,6 +281,58 @@ void Manager::paintSelectedAssociatedAccumulations() {
   tempPointCloud->setTransparency(defaultPointTransparency);
   tempPointCloud->setPointRenderMode(polyscope::PointRenderMode::Quad);
   tempPointCloud->setEnabled(true);
+}
+void Manager::paintClusterFacesVoxels(AccumulationAlgorithms::HashMap2Voxel& mapVoxel, DGtalUint clusterLabel) {
+
+  std::vector<double> vScalar;
+  sc.pointList.clear();
+  for (int i = 1; i < sc.accSimpleCluster.size(); i++) {
+    for (const auto posHashValue : sc.accSimpleCluster[i]) {
+      auto tempV = mapVoxel.at(posHashValue);
+      auto tempPos = glm::vec3(tempV.position[0], tempV.position[1], tempV.position[2]);
+      sc.pointList.push_back(tempPos);
+      vScalar.push_back(i);
+    }
+  }
+
+  // cluster voxels color
+  auto primaryPointCloud = polyscope::getPointCloud("Primary Voxels");
+  if (primaryPointCloud == nullptr) {
+    return;
+  }
+  primaryPointCloud->setEnabled(false);
+  polyscope::PointCloud* tempPointCloud = polyscope::registerPointCloud("Cluster Voxels", sc.pointList);
+  tempPointCloud->setPointRadius(defaultPointRadius);
+  turboColorMapRange = std::make_pair(1, clusterLabel); // ignore 0
+  auto q1 = tempPointCloud->addScalarQuantity("Cluster points color", vScalar);
+  q1->setColorMap("turbo");
+  q1->setMapRange(turboColorMapRange);
+  q1->setEnabled(true);
+  log->add(LogLevel::INFO, "Cluster voxels painted ", Timer::now());
+  // cluster faces color
+  // for (auto f : voxel.associatedFaceIds) {
+  //   // aMesh.setFaceColor(f, cTemp);
+  // }
+
+
+  auto digsurf = polyscope::getSurfaceMesh(defaultRegisteredMeshName);
+  if (digsurf == nullptr) {
+    return; // It never happens because the polyscope will fail without return a nullptr.
+  }
+  currentfacesColor.clear();
+  currentfacesColor.resize(digsurf->nFaces(), defaultMeshColor);
+  auto& usedColorMap = polyscope::render::engine->getColorMap("turbo");
+
+  for (int i = 1; i < sc.accSimpleCluster.size(); i++) {
+    double tempValue = (i * 1.0l - turboColorMapRange.first) / (turboColorMapRange.second - turboColorMapRange.first);
+    auto tempColor = usedColorMap.getValue(tempValue);
+    for (const auto posHashValue : sc.accSimpleCluster[i]) {
+      for (auto fId : mapVoxel.at(posHashValue).associatedFaceIds) {
+        currentfacesColor[fId] = tempColor;
+      }
+    }
+  }
+  digsurf->addFaceColorQuantity("Cluster faces color", currentfacesColor)->setEnabled(true);
 }
 void Manager::mouseSelectStructureEvent(ImGuiIO& io) {
   // polyscope default left-click selection

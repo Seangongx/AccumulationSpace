@@ -17,8 +17,8 @@
 #include <string>
 #include <vector>
 ////////////////////////////////////////////////////////////////////////////////
-// #include "AccumulationAlgorithms.h"
-// #include "AccumulationAlgorithms.ipp"
+#include "AccumulationAlgorithms.h"
+#include "AccumulationAlgorithms.ipp"
 #include "AccumulationSpace.h"
 #include "AccumulationSpace.ipp"
 #include "DGtal/shapes/Mesh.h"
@@ -74,7 +74,7 @@ public:
   bool accBtnPressed1 = false;
   bool accBtnPressed2 = false;
   bool accBtnPressed3 = false;
-  bool accBtnPressed4 = false;
+  bool accBtnPressed4 = true;
   bool accBtnPressed5 = false;
 
 private:
@@ -84,6 +84,7 @@ private:
   void paintFacesOn(std::string& meshName, std::string& quantityName,
                     std::unordered_map<size_t, std::vector<DGtalUint>>& faceMap);
   void paintSelectedAssociatedAccumulations();
+  void paintClusterFacesVoxels(AccumulationAlgorithms::HashMap2Voxel& mapVoxel, DGtalUint clusterLabel);
 
   // event functions
   void mouseEventCallback(ImGuiIO& io);
@@ -120,7 +121,7 @@ private:
   std::unordered_map<size_t, AccVoxel> globalHashMap;
   std::unordered_map<size_t, std::vector<DGtalUint>> globalFaceMap;
   NormalAccumulationSpace nas;
-  // AccumulationAlgorithms::SimpleCluster sc;
+  AccumulationAlgorithms::SimpleCluster sc;
 };
 
 
