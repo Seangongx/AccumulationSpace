@@ -84,7 +84,10 @@ private:
   void paintFacesOn(std::string& meshName, std::string& quantityName,
                     std::unordered_map<size_t, std::vector<DGtalUint>>& faceMap);
   void paintSelectedAssociatedAccumulations();
-  void paintClusterFacesVoxels(AccumulationAlgorithms::HashMap2Voxel& mapVoxel, DGtalUint clusterLabel);
+  void paintColoredClusterPointsIn(std::string pointCloudName, AccumulationAlgorithms::SimpleCluster& sc);
+  void paintColoredClusterFacesOn(std::string meshName, std::string quantityName,
+                                  AccumulationAlgorithms::SimpleCluster& sc);
+  void paintCluster(AccumulationAlgorithms::SimpleCluster& sc);
 
   // event functions
   void mouseEventCallback(ImGuiIO& io);
@@ -96,13 +99,17 @@ private:
   // Default settings
   std::string defaultRegisteredMeshName{"InputMesh"};
   std::string defaultOutputFileName{"result.obj"};
+  std::string defaultColorMap{"turbo"};
   std::string defaultMeshColorQuantityName{"default faces color"};
   std::string associatedMeshColorQuantityName{"associated faces color"};
   float defaultImguiDPIRatio{1.8f};
-  PsColor defaultMeshColor{0.8f, 0.8f, 0.8f};
   float defaultMeshTransparency{0.4f};
   float defaultPointTransparency{0.8f};
-  float defaultPointRadius{0.008f};
+  float defaultPointRadius{0.01f};
+  int defaultAlgoMaxStep{5};
+  PsColor defaultMeshColor{0.8f, 0.8f, 0.8f};
+  std::pair<double, double> defaultColorMapRange;
+
   DGtal::Mesh<DGtal::Z3i::RealPoint> defaultMesh{true};
   std::shared_ptr<AccumulationLog> log;
 
@@ -111,15 +118,14 @@ private:
   size_t clickCount = 0;
   size_t selectedElementId = 0;
   std::set<size_t> associatedAccumulationIds;
-  std::pair<double, double> turboColorMapRange;
 
   int faceSelectedId = -1;
   int voxelSelectedId = -1;
 
   // Accumulation display relevant conponents
   std::vector<double> accmulationScalarValues;
-  std::unordered_map<size_t, AccVoxel> globalHashMap;
-  std::unordered_map<size_t, std::vector<DGtalUint>> globalFaceMap;
+  std::unordered_map<size_t, AccVoxel> globalHashMap;               // [hashValue, voxelData]
+  std::unordered_map<size_t, std::vector<DGtalUint>> globalFaceMap; // [faceId,voxelId]
   NormalAccumulationSpace nas;
   AccumulationAlgorithms::SimpleCluster sc;
 };

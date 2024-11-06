@@ -38,7 +38,7 @@ public:
     return oss.str();
   }
 
-  ~Timer() { std::cout << m_name << "stop counting\n"; }
+  ~Timer() {}
 
 private:
   std::string m_name;

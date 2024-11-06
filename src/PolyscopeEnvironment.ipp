@@ -33,7 +33,7 @@ Manager::Manager(const std::string& meshFile, const std::string& accFile, std::s
   // Load default data
   addSurface(currentPolysurf);
   firstPolysurf = currentPolysurf;
-  addPointCloud("Primary Voxels", nas.pointList, 0.008);
+  addPointCloud("Primary Voxels", nas.pointList, defaultPointRadius);
 
   promptText = "Select nothing at the beginning\n";
   // build necessary data structure
@@ -66,14 +66,9 @@ void Manager::addPointCloud(const std::string& structName, PointLists& structPoi
   psCloud->setPointRenderMode(polyscope::PointRenderMode::Quad);
 
   {
-    // setTransparencyQuantity does not support pick selection yet
-    // auto q2 = psCloud->addScalarQuantity("accumulationTransparency",
-    // accumulationTransparency); psCloud->setTransparencyQuantity(q2);
-
     // polyscope::loadColorMap("sampleColorMap",
     // "/home/adam/Desktop/AccumulationSpace/samples/sample_colormap.png");
   }
-  // structureTypes["InputPoints"] = POINTCLOUD;
 }
 void Manager::addSurface(PolySurface& psurf) {
   std::vector<std::vector<size_t>> faces;
@@ -204,6 +199,7 @@ void Manager::setImguiCustomPanel() {
           ->addFaceColorQuantity(defaultMeshColorQuantityName, defaultfacesColor);
     } else {
       polyscope::getSurfaceMesh(defaultRegisteredMeshName)->removeQuantity(defaultMeshColorQuantityName);
+      // polyscope::removePointCloud("Cluster Voxels");
     }
     accBtnPressed2 = !accBtnPressed2;
   }
@@ -223,12 +219,15 @@ void Manager::setImguiCustomPanel() {
   if (ImGui::Button(accBtnPressed4 ? "Show clusters" : "Hide clusters")) {
     if (accBtnPressed4) {
       sc.buildCluster(nas.voxelList, 0, 0.0, log);
-      paintClusterFacesVoxels(sc.mapVoxel, sc.clusterLabel);
+      paintCluster(sc);
     } else {
+      polyscope::getPointCloud("Cluster Voxels")->setEnabled(false);
+      polyscope::getSurfaceMesh(defaultRegisteredMeshName)->removeQuantity("Cluster faces color");
+      sc.clearCluster();
     }
     accBtnPressed4 = !accBtnPressed4;
   }
-  if (ImGui::SliderInt("Traverse step", &imguiAlgoStep, 0, 20)) {
+  if (ImGui::SliderInt("Traverse step", &imguiAlgoStep, 0, defaultAlgoMaxStep)) {
     // sc.buildCluster(nas.voxelList, imguiAlgoStep, 0.0);
     promptText = "Traverse step: " + std::to_string(imguiAlgoStep);
     mouseDragSliderEvent(imguiAlgoStep);
@@ -272,74 +271,84 @@ void Manager::paintSelectedAssociatedAccumulations() {
   polyscope::PointCloud* tempPointCloud =
       polyscope::registerPointCloud("Selected Associated Voxels", selectedAssociatedPoints);
   tempPointCloud->setPointRadius(defaultPointRadius);
-  turboColorMapRange = AccumulationSpace::getMinMaxVotesCountFrom(nas.voxelList);
+  defaultColorMapRange = AccumulationSpace::getMinMaxVotesCountFrom(nas.voxelList);
   auto q1 = tempPointCloud->addScalarQuantity("AssoAcc", vScalar);
-  q1->setColorMap("turbo");
-  q1->setMapRange(turboColorMapRange);
+  q1->setColorMap(defaultColorMap);
+  q1->setMapRange(defaultColorMapRange);
   q1->setEnabled(true);
 
   tempPointCloud->setTransparency(defaultPointTransparency);
   tempPointCloud->setPointRenderMode(polyscope::PointRenderMode::Quad);
   tempPointCloud->setEnabled(true);
 }
-void Manager::paintClusterFacesVoxels(AccumulationAlgorithms::HashMap2Voxel& mapVoxel, DGtalUint clusterLabel) {
+void Manager::paintColoredClusterPointsIn(std::string pointCloudName, AccumulationAlgorithms::SimpleCluster& sc) {
 
+  // cluster position map with scalar
   std::vector<double> vScalar;
   sc.pointList.clear();
   for (int i = 1; i < sc.accSimpleCluster.size(); i++) {
     for (const auto posHashValue : sc.accSimpleCluster[i]) {
-      auto tempV = mapVoxel.at(posHashValue);
+      auto tempV = sc.mapVoxel.at(posHashValue);
       auto tempPos = glm::vec3(tempV.position[0], tempV.position[1], tempV.position[2]);
       sc.pointList.push_back(tempPos);
       vScalar.push_back(i);
     }
   }
+  // coloring cluster voxels
+  polyscope::PointCloud* tempPointCloud = polyscope::registerPointCloud(pointCloudName, sc.pointList);
+  tempPointCloud->setPointRadius(defaultPointRadius);
+  tempPointCloud->setEnabled(true);
+  // TODO: get selected color map and map range
+  defaultColorMapRange = std::make_pair(0, sc.clusterLabel);
+  auto quantity = tempPointCloud->addScalarQuantity("Cluster points color", vScalar);
+  quantity->setColorMap(defaultColorMap);
+  quantity->setMapRange(defaultColorMapRange);
+  quantity->setEnabled(true);
+  log->add(LogLevel::INFO, "Cluster voxels painted ", Timer::now());
+}
+void Manager::paintColoredClusterFacesOn(std::string meshName, std::string quantityName,
+                                         AccumulationAlgorithms::SimpleCluster& sc) {
+  auto digsurf = polyscope::getSurfaceMesh(meshName);
+  if (digsurf == nullptr) {
+    return;
+  }
+  currentfacesColor.clear();
+  currentfacesColor.resize(digsurf->nFaces(), defaultMeshColor);
+  auto& usedColorMap = polyscope::render::engine->getColorMap(defaultColorMap);
 
-  // cluster voxels color
+  // TODO: get selected color map and map range
+  for (int i = 1; i < sc.accSimpleCluster.size(); i++) {
+    double tempValue =
+        (i * 1.0l - defaultColorMapRange.first) / (defaultColorMapRange.second - defaultColorMapRange.first);
+    auto tempColor = usedColorMap.getValue(tempValue);
+    for (const auto posHashValue : sc.accSimpleCluster[i]) {
+      for (auto fId : sc.mapVoxel.at(posHashValue).associatedFaceIds) {
+        currentfacesColor[fId] = tempColor;
+      }
+    }
+  }
+  digsurf->addFaceColorQuantity(quantityName, currentfacesColor)->setEnabled(true);
+  log->add(LogLevel::INFO, "Cluster faces color painted ", Timer::now());
+}
+void Manager::paintCluster(AccumulationAlgorithms::SimpleCluster& sc) {
   auto primaryPointCloud = polyscope::getPointCloud("Primary Voxels");
   if (primaryPointCloud == nullptr) {
     return;
   }
   primaryPointCloud->setEnabled(false);
-  polyscope::PointCloud* tempPointCloud = polyscope::registerPointCloud("Cluster Voxels", sc.pointList);
-  tempPointCloud->setPointRadius(defaultPointRadius);
-  turboColorMapRange = std::make_pair(1, clusterLabel); // ignore 0
-  auto q1 = tempPointCloud->addScalarQuantity("Cluster points color", vScalar);
-  q1->setColorMap("turbo");
-  q1->setMapRange(turboColorMapRange);
-  q1->setEnabled(true);
-  log->add(LogLevel::INFO, "Cluster voxels painted ", Timer::now());
-  // cluster faces color
-  // for (auto f : voxel.associatedFaceIds) {
-  //   // aMesh.setFaceColor(f, cTemp);
-  // }
 
-
-  auto digsurf = polyscope::getSurfaceMesh(defaultRegisteredMeshName);
-  if (digsurf == nullptr) {
-    return; // It never happens because the polyscope will fail without return a nullptr.
-  }
-  currentfacesColor.clear();
-  currentfacesColor.resize(digsurf->nFaces(), defaultMeshColor);
-  auto& usedColorMap = polyscope::render::engine->getColorMap("turbo");
-
-  for (int i = 1; i < sc.accSimpleCluster.size(); i++) {
-    double tempValue = (i * 1.0l - turboColorMapRange.first) / (turboColorMapRange.second - turboColorMapRange.first);
-    auto tempColor = usedColorMap.getValue(tempValue);
-    for (const auto posHashValue : sc.accSimpleCluster[i]) {
-      for (auto fId : mapVoxel.at(posHashValue).associatedFaceIds) {
-        currentfacesColor[fId] = tempColor;
-      }
-    }
-  }
-  digsurf->addFaceColorQuantity("Cluster faces color", currentfacesColor)->setEnabled(true);
+  // coloring cluster voxels
+  paintColoredClusterPointsIn("Cluster Voxels", sc);
+  // coloring cluster faces
+  paintColoredClusterFacesOn(defaultRegisteredMeshName, "Cluster faces color", sc);
 }
+
 void Manager::mouseSelectStructureEvent(ImGuiIO& io) {
   // polyscope default left-click selection
-  if (polyscope::pick::haveSelection()) {
-    std::pair<polyscope::Structure*, size_t> selection = polyscope::pick::getSelection();
-    // if double clicked an accumulation voxel
-    if (io.MouseDoubleClicked[0]) {
+  if (io.MouseDoubleClicked[0]) {
+    if (polyscope::pick::haveSelection()) {
+      std::pair<polyscope::Structure*, size_t> selection = polyscope::pick::getSelection();
+
       if (selection.second < 0) {
         promptText = "ERROR: In mouseSelectAccumulation() selection.second < 0";
         log->add(LogLevel::ERROR, "ERROR: In mouseSelectAccumulation() selection.second < 0 ", Timer::now());
@@ -351,18 +360,28 @@ void Manager::mouseSelectStructureEvent(ImGuiIO& io) {
         storeSelectedAssociatedFacesInMap();
         // paintSelectedAssociatedFaces();
         paintFacesOn(defaultRegisteredMeshName, associatedMeshColorQuantityName, selectedAssociatedFacesMap);
-      } else if (selection.first->typeName() == "Surface Mesh") {
+      }
+      if (selection.first->typeName() == "Surface Mesh") {
         clickCount++;
         selectedElementId = convertMeshElementIdInPolyscope(selection.second);
         findLoadedAssociatedAccumulationsByFaceId();
         paintSelectedAssociatedAccumulations(); // one voxel for now
                                                 // vector<accId>
       }
-      // promptText = "[Double click " + selection.first->typeName() + "]: " + std::to_string(selectedElementId);
     }
   }
 }
-void Manager::mouseDragSliderEvent(int& step) {}
+void Manager::mouseDragSliderEvent(int& step) {
+  if (step < 0) {
+    step = 0;
+  }
+  if (step > defaultAlgoMaxStep) {
+    step = defaultAlgoMaxStep;
+  }
+  // sc.buildCluster(nas.voxelList, step, 0.0);
+  paintCluster(sc);
+  log->add(LogLevel::INFO, "Traverse step: ", step, " painted ", Timer::now());
+}
 void Manager::mouseEventCallback(ImGuiIO& io) {
   // mouseSelectFaces(io)
   // mouseSelectIndexTest(io);

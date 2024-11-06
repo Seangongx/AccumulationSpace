@@ -1,4 +1,4 @@
-# Normal Accumulation Space and Confidence on surface mesh.
+# Normal Accumulation Space and Confidence on surface mesh
 
 ## Dependencies
 1. CMake >= 3.11 
