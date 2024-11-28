@@ -75,7 +75,7 @@ public:
   bool accBtnPressed2 = false;
   bool accBtnPressed3 = false;
   bool accBtnPressed4 = true;
-  bool accBtnPressed5 = false;
+  bool accBtnPressed5 = true;
 
 private:
   size_t convertMeshElementIdInPolyscope(size_t elementId);

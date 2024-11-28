@@ -43,8 +43,6 @@ Manager::Manager(const std::string& meshFile, const std::string& accFile, std::s
 
   polyscope::state::userCallback = [this]() { this->callback(); };
   polyscope::show();
-
-  // sc.buildCluster(nas.voxelList, 0, 0.0);
 }
 // Visualize accumulation set in space
 void Manager::addPointCloud(const std::string& structName, PointLists& structPoints, double structRadius) {
@@ -216,9 +214,10 @@ void Manager::setImguiCustomPanel() {
   }
 
   ImGui::Text("Cluster algorithm manipulation");
-  if (ImGui::Button(accBtnPressed4 ? "Show clusters" : "Hide clusters")) {
+  if (ImGui::Button(accBtnPressed4 ? "Show simple clusters" : "Hide simple clusters")) {
     if (accBtnPressed4) {
-      sc.buildCluster(nas.voxelList, 0, 0.0, log);
+      sc.clearCluster();
+      sc.buildCluster(nas.voxelList, 0, 0.0, log, imguiAlgoStep);
       paintCluster(sc);
     } else {
       polyscope::getPointCloud("Cluster Voxels")->setEnabled(false);
@@ -227,8 +226,21 @@ void Manager::setImguiCustomPanel() {
     }
     accBtnPressed4 = !accBtnPressed4;
   }
-  if (ImGui::SliderInt("Traverse step", &imguiAlgoStep, 0, defaultAlgoMaxStep)) {
-    // sc.buildCluster(nas.voxelList, imguiAlgoStep, 0.0);
+  if (ImGui::Button(accBtnPressed5 ? "Show radius clusters" : "Hide radius clusters")) {
+    if (accBtnPressed5) {
+      sc.clearCluster();
+      sc.buildRadiusCluster(nas.voxelList, 0, 0.0, log, polyscope::getSurfaceMesh(defaultRegisteredMeshName));
+      paintCluster(sc);
+    } else {
+      polyscope::getPointCloud("Cluster Voxels")->setEnabled(false);
+      polyscope::getSurfaceMesh(defaultRegisteredMeshName)->removeQuantity("Cluster faces color");
+      sc.clearCluster();
+    }
+    accBtnPressed5 = !accBtnPressed5;
+  }
+  if (ImGui::SliderInt("Traverse step", &imguiAlgoStep, 1, defaultAlgoMaxStep)) {
+    sc.clearCluster();
+    sc.buildCluster(nas.voxelList, 0, 0.0, log, imguiAlgoStep);
     promptText = "Traverse step: " + std::to_string(imguiAlgoStep);
     mouseDragSliderEvent(imguiAlgoStep);
   }
@@ -378,7 +390,6 @@ void Manager::mouseDragSliderEvent(int& step) {
   if (step > defaultAlgoMaxStep) {
     step = defaultAlgoMaxStep;
   }
-  // sc.buildCluster(nas.voxelList, step, 0.0);
   paintCluster(sc);
   log->add(LogLevel::INFO, "Traverse step: ", step, " painted ", Timer::now());
 }
