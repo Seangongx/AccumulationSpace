@@ -216,13 +216,17 @@ void Manager::setImguiCustomPanel() {
   ImGui::Text("Cluster algorithm manipulation");
   if (ImGui::Button(accBtnPressed4 ? "Show simple clusters" : "Hide simple clusters")) {
     if (accBtnPressed4) {
-      sc.clearCluster();
-      sc.buildCluster(nas.voxelList, 0, 0.0, log, imguiAlgoStep);
-      paintCluster(sc);
+      AccumulationAlgorithms::NeighbourClusterAlgo nca;
+      nca.clearCluster();
+      nca.buildCluster(nas.voxelList, 0, 0.0, log, imguiAlgoStep);
+      paintCluster(nca);
+      // sc.clearCluster();
+      // sc.buildCluster(nas.voxelList, 0, 0.0, log, imguiAlgoStep);
+      // paintCluster(sc);
     } else {
       polyscope::getPointCloud("Cluster Voxels")->setEnabled(false);
       polyscope::getSurfaceMesh(defaultRegisteredMeshName)->removeQuantity("Cluster faces color");
-      sc.clearCluster();
+      // sc.clearCluster();
     }
     accBtnPressed4 = !accBtnPressed4;
   }
@@ -318,6 +322,32 @@ void Manager::paintColoredClusterPointsIn(std::string pointCloudName, Accumulati
   quantity->setEnabled(true);
   log->add(LogLevel::INFO, "Cluster voxels painted ", Timer::now());
 }
+void Manager::paintColoredClusterPointsIn(std::string pointCloudName,
+                                          AccumulationAlgorithms::NeighbourClusterAlgo& sc) {
+
+  // cluster position map with scalar
+  std::vector<double> vScalar;
+  sc.pointList.clear();
+  for (int i = 1; i < sc.cluster.size(); i++) {
+    for (const auto posHashValue : sc.cluster[i]) {
+      auto tempV = sc.voxelMap.at(posHashValue);
+      auto tempPos = glm::vec3(tempV.position[0], tempV.position[1], tempV.position[2]);
+      sc.pointList.push_back(tempPos);
+      vScalar.push_back(i);
+    }
+  }
+  // coloring cluster voxels
+  polyscope::PointCloud* tempPointCloud = polyscope::registerPointCloud(pointCloudName, sc.pointList);
+  tempPointCloud->setPointRadius(defaultPointRadius);
+  tempPointCloud->setEnabled(true);
+  // TODO: get selected color map and map range
+  defaultColorMapRange = std::make_pair(0, sc.clusterLabel);
+  auto quantity = tempPointCloud->addScalarQuantity("Cluster points color", vScalar);
+  quantity->setColorMap(defaultColorMap);
+  quantity->setMapRange(defaultColorMapRange);
+  quantity->setEnabled(true);
+  log->add(LogLevel::INFO, "Cluster voxels painted ", Timer::now());
+}
 void Manager::paintColoredClusterFacesOn(std::string meshName, std::string quantityName,
                                          AccumulationAlgorithms::SimpleCluster& sc) {
   auto digsurf = polyscope::getSurfaceMesh(meshName);
@@ -342,7 +372,43 @@ void Manager::paintColoredClusterFacesOn(std::string meshName, std::string quant
   digsurf->addFaceColorQuantity(quantityName, currentfacesColor)->setEnabled(true);
   log->add(LogLevel::INFO, "Cluster faces color painted ", Timer::now());
 }
+void Manager::paintColoredClusterFacesOn(std::string meshName, std::string quantityName,
+                                         AccumulationAlgorithms::NeighbourClusterAlgo& sc) {
+  auto digsurf = polyscope::getSurfaceMesh(meshName);
+  if (digsurf == nullptr) {
+    return;
+  }
+  currentfacesColor.clear();
+  currentfacesColor.resize(digsurf->nFaces(), defaultMeshColor);
+  auto& usedColorMap = polyscope::render::engine->getColorMap(defaultColorMap);
+
+  // TODO: get selected color map and map range
+  for (int i = 1; i < sc.cluster.size(); i++) {
+    double tempValue =
+        (i * 1.0l - defaultColorMapRange.first) / (defaultColorMapRange.second - defaultColorMapRange.first);
+    auto tempColor = usedColorMap.getValue(tempValue);
+    for (const auto posHashValue : sc.cluster[i]) {
+      for (auto fId : sc.voxelMap.at(posHashValue).associatedFaceIds) {
+        currentfacesColor[fId] = tempColor;
+      }
+    }
+  }
+  digsurf->addFaceColorQuantity(quantityName, currentfacesColor)->setEnabled(true);
+  log->add(LogLevel::INFO, "Cluster faces color painted ", Timer::now());
+}
 void Manager::paintCluster(AccumulationAlgorithms::SimpleCluster& sc) {
+  auto primaryPointCloud = polyscope::getPointCloud("Primary Voxels");
+  if (primaryPointCloud == nullptr) {
+    return;
+  }
+  primaryPointCloud->setEnabled(false);
+
+  // coloring cluster voxels
+  paintColoredClusterPointsIn("Cluster Voxels", sc);
+  // coloring cluster faces
+  paintColoredClusterFacesOn(defaultRegisteredMeshName, "Cluster faces color", sc);
+}
+void Manager::paintCluster(AccumulationAlgorithms::NeighbourClusterAlgo& sc) {
   auto primaryPointCloud = polyscope::getPointCloud("Primary Voxels");
   if (primaryPointCloud == nullptr) {
     return;

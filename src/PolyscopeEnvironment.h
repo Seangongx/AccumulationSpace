@@ -85,9 +85,13 @@ private:
                     std::unordered_map<size_t, std::vector<DGtalUint>>& faceMap);
   void paintSelectedAssociatedAccumulations();
   void paintColoredClusterPointsIn(std::string pointCloudName, AccumulationAlgorithms::SimpleCluster& sc);
+  void paintColoredClusterPointsIn(std::string pointCloudName, AccumulationAlgorithms::NeighbourClusterAlgo& sc);
   void paintColoredClusterFacesOn(std::string meshName, std::string quantityName,
                                   AccumulationAlgorithms::SimpleCluster& sc);
+  void paintColoredClusterFacesOn(std::string meshName, std::string quantityName,
+                                  AccumulationAlgorithms::NeighbourClusterAlgo& sc);
   void paintCluster(AccumulationAlgorithms::SimpleCluster& sc);
+  void paintCluster(AccumulationAlgorithms::NeighbourClusterAlgo& sc);
 
   // event functions
   void mouseEventCallback(ImGuiIO& io);

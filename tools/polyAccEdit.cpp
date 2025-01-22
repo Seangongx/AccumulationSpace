@@ -105,6 +105,7 @@ int main(int argc, char** argv) {
   // Initialize log file
   auto globalLogFileStream = std::make_shared<std::fstream>(defaultLogFile, std::ios::out | std::ios::trunc);
   AccumulationSpace::AccumulationLog defaultLog(defaultLogFile, logLevel, globalLogFileStream);
+
   // Initialize polyscope environment
   std::shared_ptr<AccumulationSpace::AccumulationLog> defaultLogPtr =
       std::make_shared<AccumulationSpace::AccumulationLog>(defaultLog);

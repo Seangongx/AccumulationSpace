@@ -19,6 +19,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <typeinfo>
 #include <vector>
 ///////////////////////////////////////////////////////////////////////////////
 #include "DGtal/helpers/StdDefs.h"

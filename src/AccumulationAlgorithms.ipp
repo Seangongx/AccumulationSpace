@@ -450,4 +450,166 @@ void SimpleCluster::markRadiusNeighbours(const AccVoxel& voxel, HashMap2Voxel& m
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
+
+ClusterAlgoBase::ClusterAlgoBase() {
+  std::cerr << typeid(*this).name() << " default constructor normally need to be explicit initialized" << std::endl;
+}
+void ClusterAlgoBase::clearCluster() {
+  if (log == nullptr) {
+    return;
+  }
+  voxelMap.clear();
+  cluster.clear();
+  clusterLabel = 0;
+  accPQ = std::priority_queue<AccVoxel>();
+  log->add(LogLevel::INFO, typeid(*this).name(), " has been cleaned");
+}
+ClusterAlgoBase::~ClusterAlgoBase() {
+  clearCluster();
+  log->add(LogLevel::DEBUG, typeid(*this).name(), " destructor");
+}
+template <typename MapType, typename KeyType>
+bool ClusterAlgoBase::mapKeychecker(const MapType& map, const KeyType& key) {
+  auto it = map.find(key);
+  if (it != map.end()) return true;
+  return false;
+}
+
+NeighbourClusterAlgo::NeighbourClusterAlgo() : ClusterAlgoBase(){};
+void NeighbourClusterAlgo::clearCluster() { ClusterAlgoBase::clearCluster(); }
+NeighbourClusterAlgo::~NeighbourClusterAlgo() { clearCluster(); }
+
+NeighbourClusterAlgo::NeighbourClusterAlgo(NormalAccumulationSpace& normalAccSpace, size_t thAcc, double thConf,
+                                           std::shared_ptr<AccumulationLog> logPtr) {
+
+  voxelList = normalAccSpace.voxelList;
+  buildCluster(voxelList, thAcc, thConf, logPtr, 1);
+}
+void NeighbourClusterAlgo::buildCluster(std::vector<AccVoxel>& accList, size_t thAcc, double thConf,
+                                        std::shared_ptr<AccumulationLog> logPtr, int ring) {
+  log = logPtr;
+  for (auto& v : accList) {
+    auto hashValue = AccumulationSpace::accumulationHash(v.position);
+    voxelMap[hashValue] = v;
+  }
+
+  log->add(LogLevel::INFO, "Start building ", typeid(*this).name(), " with accumulation thereshold: ", accThreshold,
+           " , confidence threshold: ", confThreshold, " and ring: ", ring);
+  Timer timer(typeid(*this).name());
+  timer.start();
+  markNRingAccLabel(voxelMap, accPQ, clusterLabel, cluster, ring);
+  timer.stop();
+  log->add(LogLevel::INFO, timer.log());
+  log->add(LogLevel::INFO, "Finish building ", typeid(*this).name(), " with ", voxelMap.size(), " voxels");
+}
+
+std::vector<std::tuple<int, int, int>> NeighbourClusterAlgo::generateNRingNeighbors(int ring) {
+  std::vector<std::tuple<int, int, int>> neighbors;
+  for (int dx = -ring; dx <= ring; ++dx) {
+    for (int dy = -ring; dy <= ring; ++dy) {
+      for (int dz = -ring; dz <= ring; ++dz) {
+        if (dx == 0 && dy == 0 && dz == 0) continue; // exclude center
+        // int distance = std::abs(dx) + std::abs(dy) + std::abs(dz);
+        // if (distance <= ring) {
+        //   neighbors.emplace_back(dx, dy, dz);
+        // }
+        int distanceSquared = dx * dx + dy * dy + dz * dz;
+        if (distanceSquared <= ring * ring) {
+          neighbors.emplace_back(dx, dy, dz);
+        }
+      }
+    }
+  }
+  return neighbors;
+}
+
+void NeighbourClusterAlgo::markNRingNeighbours(const AccVoxel& voxel, HashMap2Voxel& mapVoxel,
+                                               std::queue<AccVoxel>& queue, int ring) {
+  std::vector<std::tuple<int, int, int>> neighbors = generateNRingNeighbors(ring);
+
+  for (const auto& [dx, dy, dz] : neighbors) {
+    DGtalPoint3D posTemp(voxel.position[0] + dx, voxel.position[1] + dy, voxel.position[2] + dz);
+    auto idTemp = AccumulationSpace::accumulationHash(posTemp);
+
+    if (mapKeychecker(mapVoxel, idTemp)) {
+      auto& voxelTemp = mapVoxel.at(idTemp);
+      // skip visied/centre/flag!=0 voxel
+      if (!voxelTemp.visited && posTemp != voxel.position && voxelTemp.label == 0) {
+        voxelTemp.label = voxel.label;
+        queue.push(voxelTemp);
+        log->add(LogLevel::DEBUG, "Label in [", voxel.label, "] and push ", voxelTemp.position);
+      }
+    }
+  }
+}
+
+template <typename TypePQ>
+void NeighbourClusterAlgo::markNRingAccLabel(HashMap2Voxel& mapVoxel, TypePQ& globalPQ, DGtalUint& clusterLabel,
+                                             std::vector<std::vector<DGtalUint>>& cluster, int ring) {
+  std::queue<AccVoxel> localQ;                 // maintain the local visited:
+  cluster.push_back(std::vector<DGtalUint>()); // init the empty cluster 0
+  DGtalUint countPush = 0;
+
+  for (auto v : mapVoxel) globalPQ.push(v.second);
+
+  log->add(LogLevel::INFO, "Loaded global queue size is ", globalPQ.size());
+
+  // LOOP I: select the next voxel with the highest votes
+  while (!globalPQ.empty()) {
+    auto vCurrent = globalPQ.top();
+    auto pCurrent = vCurrent.position;
+    auto idCurrent = AccumulationSpace::accumulationHash(vCurrent.position);
+
+    if (mapVoxel.at(idCurrent).visited) {
+      globalPQ.pop();
+      log->add(LogLevel::DEBUG, "Pop(G): ", pCurrent, " and remain ", globalPQ.size());
+      continue;
+    }
+
+    // LOOP II: traverse the adjacent voxels
+
+    // Form a new cluster, push the first voxel and update the current cluster label
+    mapVoxel.at(idCurrent).visited = true;
+    mapVoxel.at(idCurrent).label = ++clusterLabel;
+    vCurrent.label = clusterLabel;
+    cluster.push_back(std::vector<DGtalUint>());
+    cluster[clusterLabel].push_back(idCurrent);
+
+    log->add(LogLevel::DEBUG, "(", ++countPush, ") push ", mapVoxel.at(idCurrent).position, " in cluster ",
+             clusterLabel, " and set visited");
+    log->add(LogLevel::DEBUG, "Current cluster center is ", pCurrent, " -> ", vCurrent.label);
+    log->add(LogLevel::DEBUG, "Remain(G): ", globalPQ.size());
+
+    // markNeighbours(vCurrent, mapVoxel, localQ);
+    markNRingNeighbours(vCurrent, mapVoxel, localQ, ring);
+    while (!localQ.empty()) {
+      auto vAdjacent = localQ.front();
+      auto pAdjacent = vAdjacent.position;
+      auto idAdjacent = AccumulationSpace::accumulationHash(vAdjacent.position);
+
+      log->add(LogLevel::DEBUG, "Visiting [", clusterLabel, "] : ", pAdjacent);
+      log->add(LogLevel::DEBUG, "Remain(L): ", localQ.size());
+
+      if (mapVoxel.at(idAdjacent).visited) {
+        localQ.pop();
+        continue;
+      }
+      if (mapVoxel.at(idAdjacent).label == 0) {
+        log->add(LogLevel::ERROR, pAdjacent, " is not visited and no label");
+      }
+
+      // mark visited, store in a cluster and label rest neighbors
+      mapVoxel.at(idAdjacent).visited = true;
+      cluster[clusterLabel].push_back(idAdjacent);
+      localQ.pop();
+      // markNeighbours(vAdjacent, mapVoxel, localQ);
+      markNRingNeighbours(vAdjacent, mapVoxel, localQ, ring);
+    }
+  }
+  log->add(LogLevel::INFO, "SUCCESS: Have ", cluster.size(), " size");
+  log->add(LogLevel::INFO, "SUCCESS: Found ", clusterLabel, " clusters");
+}
+
 } // namespace AccumulationAlgorithms
