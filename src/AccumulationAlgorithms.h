@@ -83,13 +83,16 @@ public:
   RadiusClusterAlgo();
   RadiusClusterAlgo(NormalAccumulationSpace& normalAccSpace, size_t thAcc, double thConf,
                     std::shared_ptr<AccumulationLog> logPtr);
-  ~RadiusClusterAlgo() override{};
+  ~RadiusClusterAlgo() override;
 
   void clearCluster() override;
-  void buildRadiusCluster(std::vector<AccVoxel>& accList, size_t thAcc, double thConf,
-                          std::shared_ptr<AccumulationLog> logPtr, polyscope::SurfaceMesh* mesh);
+  void buildCluster(std::vector<AccVoxel>& accList, size_t thAcc, double thConf,
+                    std::shared_ptr<AccumulationLog> logPtr, polyscope::SurfaceMesh* mesh);
 
 private:
+  std::vector<std::tuple<int, int, int>> generateNRingNeighbors(int ring);
+  void markNRingNeighbours(const AccVoxel& voxel, HashMap2Voxel& mapVoxel, std::queue<AccVoxel>& queue, int ring);
+
   void markRadiusNeighbours(const AccVoxel& voxel, HashMap2Voxel& mapVoxel, std::queue<AccVoxel>& queue,
                             polyscope::SurfaceMesh* mesh);
   glm::vec3 getBarycenterByFaceId(polyscope::SurfaceMesh* mesh, size_t faceId);
