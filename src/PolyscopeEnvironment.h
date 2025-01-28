@@ -43,7 +43,7 @@ typedef std::vector<PsPoint3D> PointLists;
 class Manager {
 public:
   Manager(const std::string& meshFile, const std::string& accFile, std::shared_ptr<AccumulationLog> logFileStream);
-  ~Manager(){};
+  ~Manager();
 
   void init(const NormalAccumulationSpace& nas);
   void addSurface(PolySurface& psurf);
@@ -76,6 +76,8 @@ public:
   bool accBtnPressed3 = false;
   bool accBtnPressed4 = true;
   bool accBtnPressed5 = true;
+  bool accBtnPressed6 = true;
+
 
 private:
   size_t convertMeshElementIdInPolyscope(size_t elementId);
@@ -84,23 +86,15 @@ private:
   void paintFacesOn(std::string& meshName, std::string& quantityName,
                     std::unordered_map<size_t, std::vector<DGtalUint>>& faceMap);
   void paintSelectedAssociatedAccumulations();
-  void paintColoredClusterPointsIn(std::string pointCloudName, AccumulationAlgorithms::SimpleCluster& sc);
-  void paintColoredClusterPointsIn(std::string pointCloudName, AccumulationAlgorithms::NeighbourClusterAlgo& sc);
-  void paintColoredClusterPointsIn(std::string pointCloudName, AccumulationAlgorithms::RadiusClusterAlgo& sc);
+  void paintColoredClusterPointsIn(std::string pointCloudName, AccumulationAlgorithms::ClusterAlgoBase& base);
   void paintColoredClusterFacesOn(std::string meshName, std::string quantityName,
-                                  AccumulationAlgorithms::SimpleCluster& sc);
-  void paintColoredClusterFacesOn(std::string meshName, std::string quantityName,
-                                  AccumulationAlgorithms::NeighbourClusterAlgo& sc);
-  void paintColoredClusterFacesOn(std::string meshName, std::string quantityName,
-                                  AccumulationAlgorithms::RadiusClusterAlgo& sc);
-  void paintCluster(AccumulationAlgorithms::SimpleCluster& sc);
-  void paintCluster(AccumulationAlgorithms::NeighbourClusterAlgo& sc);
-  void paintCluster(AccumulationAlgorithms::RadiusClusterAlgo& sc);
+                                  AccumulationAlgorithms::ClusterAlgoBase& base);
+  void paintCluster(AccumulationAlgorithms::ClusterAlgoBase& base);
 
   // event functions
   void mouseEventCallback(ImGuiIO& io);
   void mouseSelectStructureEvent(ImGuiIO& io);
-  void mouseDragSliderEvent(int& step);
+  void mouseDragSliderEvent(int& step, AccumulationAlgorithms::ClusterAlgoBase& base);
   void buttonResetSelectedColorFacesEvent();
   void buttonResetSelectedColorVoxelsEvent();
 
@@ -135,7 +129,7 @@ private:
   std::unordered_map<size_t, AccVoxel> globalHashMap;               // [hashValue, voxelData]
   std::unordered_map<size_t, std::vector<DGtalUint>> globalFaceMap; // [faceId,voxelId]
   NormalAccumulationSpace nas;
-  AccumulationAlgorithms::SimpleCluster sc;
+  AccumulationAlgorithms::ClusterAlgoBase clusterAlgo;
 };
 
 

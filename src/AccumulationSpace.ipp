@@ -50,6 +50,10 @@ void AccumulationLog::init(const std::string& logFileName, LogLevel ll, std::sha
 template <typename... Args>
 void AccumulationLog::add(LogLevel ll, Args&&... args) {
   if (ll >= level) {
+    if (!(*filePtr) || !filePtr->is_open()) {
+      std::cerr << "Log file missing" << std::endl;
+      return;
+    }
     (*filePtr) << addLogMessage(logLevelToString(ll), ": ", std::forward<Args>(args)...) << std::endl;
   }
 }

@@ -32,22 +32,26 @@ typedef AccumulationSpace::AccumulationVoxel AccVoxel;
 typedef AccumulationSpace::NormalAccumulationSpace NormalAccumulationSpace;
 typedef AccumulationSpace::LogLevel LogLevel;
 typedef AccumulationSpace::AccumulationLog AccumulationLog;
+using AccumulationSpace::accumulationHash;
 typedef std::map<DGtalUint, AccVoxel> HashMap2Voxel;
 
 class ClusterAlgoBase {
 public:
-  ClusterAlgoBase();
+  ClusterAlgoBase(){};
   virtual ~ClusterAlgoBase();
   virtual void clearCluster();
 
+  // public methods:
   template <typename MapType, typename KeyType>
   bool mapKeychecker(const MapType& map, const KeyType& key);
+  std::vector<std::tuple<int, int, int>> generateVoxelNeighbors(int ring);
+  void markVoxelNeighbours(const AccVoxel& voxel, HashMap2Voxel& voxelMap, std::queue<AccVoxel>& queue, int ring);
 
   // public members:
   DGtalUint clusterLabel = 0;
   std::vector<AccVoxel> voxelList;
-  std::vector<GLMPoint3D> pointList;
-  // <Position Hashvalue -> Voxel Object>
+  std::vector<GLMPoint3D> pointList; // store the cluster points for visualization from class outside
+  //  <Position Hashvalue -> Voxel Object>
   HashMap2Voxel voxelMap;
   // <Cluster Label -> Position Hashvalue>
   std::vector<std::vector<DGtalUint>> cluster;
@@ -61,7 +65,7 @@ protected:
 
 class NeighbourClusterAlgo : public ClusterAlgoBase {
 public:
-  NeighbourClusterAlgo();
+  NeighbourClusterAlgo(){};
   NeighbourClusterAlgo(NormalAccumulationSpace& normalAccSpace, size_t thAcc, double thConf,
                        std::shared_ptr<AccumulationLog> logPtr);
   ~NeighbourClusterAlgo() override;
@@ -71,16 +75,14 @@ public:
                     std::shared_ptr<AccumulationLog> logPtr, int ring);
 
 private:
-  std::vector<std::tuple<int, int, int>> generateNRingNeighbors(int ring);
-  void markNRingNeighbours(const AccVoxel& voxel, HashMap2Voxel& mapVoxel, std::queue<AccVoxel>& queue, int ring);
   template <typename TypePQ>
-  void markNRingAccLabel(HashMap2Voxel& mapVoxel, TypePQ& globalPQ, DGtalUint& clusterLabel,
+  void markNRingAccLabel(HashMap2Voxel& voxelMap, TypePQ& globalPQ, DGtalUint& clusterLabel,
                          std::vector<std::vector<DGtalUint>>& cluster, int ring);
 };
 
 class RadiusClusterAlgo : public ClusterAlgoBase {
 public:
-  RadiusClusterAlgo();
+  RadiusClusterAlgo(){};
   RadiusClusterAlgo(NormalAccumulationSpace& normalAccSpace, size_t thAcc, double thConf,
                     std::shared_ptr<AccumulationLog> logPtr);
   ~RadiusClusterAlgo() override;
@@ -90,9 +92,6 @@ public:
                     std::shared_ptr<AccumulationLog> logPtr, polyscope::SurfaceMesh* mesh);
 
 private:
-  std::vector<std::tuple<int, int, int>> generateNRingNeighbors(int ring);
-  void markNRingNeighbours(const AccVoxel& voxel, HashMap2Voxel& mapVoxel, std::queue<AccVoxel>& queue, int ring);
-
   void markRadiusNeighbours(const AccVoxel& voxel, HashMap2Voxel& mapVoxel, std::queue<AccVoxel>& queue,
                             polyscope::SurfaceMesh* mesh);
   glm::vec3 getBarycenterByFaceId(polyscope::SurfaceMesh* mesh, size_t faceId);
@@ -101,73 +100,6 @@ private:
   template <typename TypePQ>
   void markRidiusAccLabel(HashMap2Voxel& mapVoxel, TypePQ& globalPQ, DGtalUint& clusterLabel,
                           std::vector<std::vector<DGtalUint>>& cluster, polyscope::SurfaceMesh* mesh);
-};
-
-/**
- * @class SimpleAccCluster
- * @brief The simplest clustring algorithm for accumulation voxels \n
- * Input: NormalAccumulationSpace, AccumulationLog, SurfaceMesh \n
- * Parameters: threshold of <accumulation, confidence>, neighbour range <ring>
- */
-class SimpleCluster {
-public:
-  SimpleCluster();
-  SimpleCluster(NormalAccumulationSpace& normalAccSpace, size_t thAcc, double thConf,
-                std::shared_ptr<AccumulationLog> logPtr);
-  ~SimpleCluster(){};
-
-  void clearCluster();
-  void buildCluster(std::vector<AccVoxel>& accList, size_t thAcc, double thConf,
-                    std::shared_ptr<AccumulationLog> logPtr, int ring);
-  void buildRadiusCluster(std::vector<AccVoxel>& accList, size_t thAcc, double thConf,
-                          std::shared_ptr<AccumulationLog> logPtr, polyscope::SurfaceMesh* mesh);
-
-  template <typename MapType, typename KeyType>
-  bool mapKeychecker(const MapType& map, const KeyType& key);
-
-  // public members
-  // <Position Hashvalue : Voxel Object>
-  HashMap2Voxel mapVoxel;
-  // <Cluster Label : Position Hashvalue>
-  std::vector<std::vector<DGtalUint>> accSimpleCluster;
-  std::vector<AccVoxel> voxelList;
-  std::vector<GLMPoint3D> pointList;
-  DGtalUint clusterLabel = 0;
-  std::priority_queue<AccVoxel> accPQ;
-
-private:
-  std::vector<std::tuple<int, int, int>> generateNRingNeighbors(int ring);
-
-  void markNRingNeighbours(const AccVoxel& voxel, HashMap2Voxel& mapVoxel, std::queue<AccVoxel>& queue, int ring);
-
-  /// @brief Push surrounding voxels which are unvisited and no label in local queue
-  void markNeighbours(const AccVoxel& voxel, HashMap2Voxel& mapVoxel, std::queue<AccVoxel>& queue);
-
-  /// @brief Push surrounding voxels which are unvisited and no label in local queue according to the center radius
-  void markRadiusNeighbours(const AccVoxel& voxel, HashMap2Voxel& mapVoxel, std::queue<AccVoxel>& queue,
-                            polyscope::SurfaceMesh* mesh);
-
-  /// @brief Using a breadth-first traversal strategy to label all clusters
-  /// @tparam TypePQ
-  template <typename TypePQ>
-  void markAccLabel(HashMap2Voxel& mapVoxel, TypePQ& globalPQ, DGtalUint& clusterLabel,
-                    std::vector<std::vector<DGtalUint>>& cluster);
-  template <typename TypePQ>
-  void markNRingAccLabel(HashMap2Voxel& mapVoxel, TypePQ& globalPQ, DGtalUint& clusterLabel,
-                         std::vector<std::vector<DGtalUint>>& cluster, int ring);
-  glm::vec3 getBarycenterByFaceId(polyscope::SurfaceMesh* mesh, size_t faceId);
-  float getAverageRadiusByAccumulation(const AccVoxel& voxel, polyscope::SurfaceMesh* mesh);
-
-  template <typename TypePQ>
-  void markRidiusAccLabel(HashMap2Voxel& mapVoxel, TypePQ& globalPQ, DGtalUint& clusterLabel,
-                          std::vector<std::vector<DGtalUint>>& cluster, polyscope::SurfaceMesh* mesh);
-
-  // private members
-  std::shared_ptr<AccumulationLog> log;
-
-
-  size_t accThreshold = 0;
-  double confThreshold = .0f;
 };
 
 
