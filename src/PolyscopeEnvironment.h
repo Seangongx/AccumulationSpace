@@ -41,13 +41,15 @@ typedef std::vector<PsPoint3D> PointLists;
 
 // Manager class for Polyscope environment settings
 class Manager {
-public:
-  Manager(const std::string& meshFile, const std::string& accFile, std::shared_ptr<AccumulationLog> logFileStream);
+ public:
+  Manager(const std::string& meshFile, const std::string& accFile,
+          std::shared_ptr<AccumulationLog> logFileStream);
   ~Manager();
 
   void init(const NormalAccumulationSpace& nas);
   void addSurface(PolySurface& psurf);
-  void addPointCloud(const std::string& structName, PointLists& structPoints, double structRadius);
+  void addPointCloud(const std::string& structName, PointLists& structPoints,
+                     double structRadius);
   void buildHashMap2Voxels();
   void buildFaceMap2Voxels();
 
@@ -78,23 +80,27 @@ public:
   bool accBtnPressed5 = true;
   bool accBtnPressed6 = true;
 
-
-private:
+ private:
   size_t convertMeshElementIdInPolyscope(size_t elementId);
   void findLoadedAssociatedAccumulationsByFaceId();
   void storeSelectedAssociatedFacesInMap();
-  void paintFacesOn(std::string& meshName, std::string& quantityName,
-                    std::unordered_map<size_t, std::vector<DGtalUint>>& faceMap);
+  void paintFacesOn(
+      std::string& meshName, std::string& quantityName,
+      std::unordered_map<size_t, std::vector<DGtalUint>>& faceMap);
   void paintSelectedAssociatedAccumulations();
-  void paintColoredClusterPointsIn(std::string pointCloudName, AccumulationAlgorithms::ClusterAlgoBase& base);
-  void paintColoredClusterFacesOn(std::string meshName, std::string quantityName,
-                                  AccumulationAlgorithms::ClusterAlgoBase& base);
+  void paintColoredClusterPointsIn(
+      std::string pointCloudName,
+      AccumulationAlgorithms::ClusterAlgoBase& base);
+  void paintColoredClusterFacesOn(
+      std::string meshName, std::string quantityName,
+      AccumulationAlgorithms::ClusterAlgoBase& base);
   void paintCluster(AccumulationAlgorithms::ClusterAlgoBase& base);
 
   // event functions
   void mouseEventCallback(ImGuiIO& io);
   void mouseSelectStructureEvent(ImGuiIO& io);
-  void mouseDragSliderEvent(int& step, AccumulationAlgorithms::ClusterAlgoBase& base);
+  void mouseDragSliderEvent(int& step,
+                            AccumulationAlgorithms::ClusterAlgoBase& base);
   void buttonResetSelectedColorFacesEvent();
   void buttonResetSelectedColorVoxelsEvent();
 
@@ -126,13 +132,14 @@ private:
 
   // Accumulation display relevant conponents
   std::vector<double> accmulationScalarValues;
-  std::unordered_map<size_t, AccVoxel> globalHashMap;               // [hashValue, voxelData]
-  std::unordered_map<size_t, std::vector<DGtalUint>> globalFaceMap; // [faceId,voxelId]
+  // [hashValue, voxelData]
+  std::unordered_map<size_t, AccVoxel> globalHashMap;
+  // [faceId,voxelId]
+  std::unordered_map<size_t, std::vector<DGtalUint>> globalFaceMap;
   NormalAccumulationSpace nas;
   AccumulationAlgorithms::ClusterAlgoBase clusterAlgo;
 };
 
+}  // namespace PolyscopeEnvironment
 
-} // namespace PolyscopeEnvironment
-
-#endif // POLYSCOPE_ENVIRONMENT_H
+#endif  // POLYSCOPE_ENVIRONMENT_H

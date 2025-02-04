@@ -7,13 +7,15 @@
 
 ## How to install 
 1. Git clone this project from the Github
-2. Configure and build this project by CMake
+2. Git clone the DGtal library and build (Remove the old path in CMakeLists.txt)
+3. Configure and build this project by CMake adding DGtal_DIR= [Your DGtal Library Path]/build
 
 You will obtain the following display: 
 
 ![polyAccEdit Interface](https://github.com/Seangongx/AccumulationSpace/blob/main/samples/Interface.png)
 
 ## Miscellaneous
+On Ubuntu and friends, you may want to `apt-get install xorg-dev libglu1-mesa-dev freeglut3-dev mesa-common-dev` to pull graphics and windowing related headers to build.
 
 ### How to debug in VSCode
 1. If you use VSCode, keep the .vscode folder for the project
