@@ -13,14 +13,13 @@ void ClusterAlgoBase::clearCluster() {
   clusterLabel = 0;
   accPQ = std::priority_queue<AccVoxel>();
   if (log != nullptr) {
-    log->add(LogLevel::INFO, typeid(*this).name(), " has been cleaned at ",
-             Timer::now());
+    log->add(LogLevel::INFO, "CLEAN: ", typeid(*this).name());
   }
 }
 ClusterAlgoBase::~ClusterAlgoBase() {
   clearCluster();
 }
-// Check if the key exists in the map
+// Check if the key exists in a template map
 template <typename MapType, typename KeyType>
 bool ClusterAlgoBase::mapKeychecker(const MapType& map, const KeyType& key) {
   auto it = map.find(key);
@@ -54,7 +53,6 @@ std::vector<std::tuple<int, int, int>> ClusterAlgoBase::generateVoxelNeighbors(
 }
 
 void ClusterAlgoBase::markVoxelNeighbours(const AccVoxel& voxel,
-                                          HashMap2Voxel& voxelMap,
                                           std::queue<AccVoxel>& queue,
                                           int ring) {
   std::vector<std::tuple<int, int, int>> neighbors =
@@ -101,45 +99,36 @@ void NeighbourClusterAlgo::buildCluster(std::vector<AccVoxel>& accList,
     auto hashValue = AccumulationSpace::accumulationHash(v.position);
     voxelMap[hashValue] = v;
   }
-
-  log->add(LogLevel::INFO,
-           "Neighbour clustering based on accumulation(value) begins: ");
-
-  log->add(LogLevel::INFO, "Start building ", typeid(*this).name(),
+  log->add(LogLevel::INFO, "START: ", typeid(*this).name(),
            " with accumulation thereshold: ", accThreshold,
            " , confidence threshold: ", confThreshold, " and ring: ", ring);
   Timer timer(typeid(*this).name());
   timer.start();
-  markNRingAccLabel(voxelMap, accPQ, clusterLabel, cluster, ring);
+  markNRingAccLabel(ring);
   timer.stop();
   log->add(LogLevel::INFO, timer.log());
-  log->add(LogLevel::INFO, "Finish building ", typeid(*this).name(), " with ",
-           voxelMap.size(), " voxels");
 }
 
-template <typename TypePQ>
-void NeighbourClusterAlgo::markNRingAccLabel(
-    HashMap2Voxel& voxelMap, TypePQ& globalPQ, DGtalUint& clusterLabel,
-    std::vector<std::vector<DGtalUint>>& cluster, int ring) {
+void NeighbourClusterAlgo::markNRingAccLabel(int ring) {
   std::queue<AccVoxel> localQ;                  // maintain the local visited:
   cluster.push_back(std::vector<DGtalUint>());  // init the empty cluster
                                                 // 0(cluster 0 doesn't be used)
   DGtalUint countPush = 0;
 
   for (auto v : voxelMap)
-    globalPQ.push(v.second);
-  log->add(LogLevel::INFO, "Loaded global queue size is ", globalPQ.size());
+    accPQ.push(v.second);
+  log->add(LogLevel::INFO, "Loaded global queue size is ", accPQ.size());
 
   // LOOP I: select the next voxel with the highest votes
-  while (!globalPQ.empty()) {
-    auto vCurrent = globalPQ.top();
+  while (!accPQ.empty()) {
+    auto vCurrent = accPQ.top();
     auto pCurrent = vCurrent.position;
     auto idCurrent = accumulationHash(vCurrent.position);
 
     if (voxelMap.at(idCurrent).visited) {
-      globalPQ.pop();
+      accPQ.pop();
       log->add(LogLevel::DEBUG, "Pop(G): ", pCurrent, " and remain ",
-               globalPQ.size());
+               accPQ.size());
       continue;
     }
 
@@ -158,10 +147,10 @@ void NeighbourClusterAlgo::markNRingAccLabel(
              " and set visited");
     log->add(LogLevel::DEBUG, "Current cluster center is ", pCurrent, " -> ",
              vCurrent.label);
-    log->add(LogLevel::DEBUG, "Remain(G): ", globalPQ.size());
+    log->add(LogLevel::DEBUG, "Remain(G): ", accPQ.size());
 
     // markNeighbours(vCurrent, mapVoxel, localQ);
-    markVoxelNeighbours(vCurrent, voxelMap, localQ, ring);
+    markVoxelNeighbours(vCurrent, localQ, ring);
     while (!localQ.empty()) {
       auto vAdjacent = localQ.front();
       auto pAdjacent = vAdjacent.position;
@@ -173,10 +162,9 @@ void NeighbourClusterAlgo::markNRingAccLabel(
       voxelMap.at(idAdjacent).visited = true;
       cluster[clusterLabel].push_back(idAdjacent);
       localQ.pop();
-      markVoxelNeighbours(vAdjacent, voxelMap, localQ, ring);
+      markVoxelNeighbours(vAdjacent, localQ, ring);
     }
   }
-  log->add(LogLevel::INFO, "FINISH: Have ", cluster.size(), " size");
   log->add(LogLevel::INFO, "FINISH: Found ", clusterLabel, " clusters");
 }
 
@@ -186,14 +174,15 @@ void RadiusClusterAlgo::clearCluster() {
 RadiusClusterAlgo::~RadiusClusterAlgo() {
   clearCluster();
 }
-
 void RadiusClusterAlgo::buildCluster(std::vector<AccVoxel>& accList,
                                      size_t thAcc, double thConf,
                                      std::shared_ptr<AccumulationLog> logPtr,
-                                     const PolySurface& surf, char mode) {
+                                     const PolySurface& polysurface,
+                                     char mode) {
   log = logPtr;
   voxelList = accList;
-  log->add(LogLevel::INFO, "Start building ", typeid(*this).name(),
+  surf = polysurface;
+  log->add(LogLevel::INFO, "START: ", typeid(*this).name(),
            " with accumulation thereshold: ", accThreshold,
            " and confidence threshold: ", confThreshold);
   for (auto& v : accList) {
@@ -204,27 +193,20 @@ void RadiusClusterAlgo::buildCluster(std::vector<AccVoxel>& accList,
            " voxels");
   for (size_t i = 0; i < voxelList.size(); i++) {
     const auto& voxel = voxelList[i];
-    log->add(LogLevel::DEBUG, "对于voxel ", voxel.position, " 有 ",
-             voxel.associatedFaceIds.size(), " 个面");
     for (auto faceId : voxel.associatedFaceIds) {
       faceMap[faceId].push_back(i);
-      log->add(LogLevel::DEBUG, "面 ", faceId, " 有对应的 ", voxel.position);
     }
   }
-
-  log->add(LogLevel::INFO,
-           "Radius clustering based on accumulation(value) begins: ");
 
   Timer timer("RadiusCluster");
   timer.start();
 
   switch (mode) {
     case 0:
-      markStaticRadiusAccLabel(voxelMap, accPQ, clusterLabel, cluster, surf);
+      markStaticRadiusAccLabel();
       break;
     case 1:
-      markDynamicRadiusAccLabel(voxelMap, accPQ, clusterLabel, cluster, surf,
-                                faceMap);
+      markDynamicRadiusAccLabel();
       break;
     default:
       log->add(LogLevel::ERROR, "Invalid mode");
@@ -232,18 +214,11 @@ void RadiusClusterAlgo::buildCluster(std::vector<AccVoxel>& accList,
 
   timer.stop();
   log->add(LogLevel::INFO, timer.log());
-  log->add(LogLevel::INFO, "Finish building simple cluster with ",
-           voxelMap.size(), " voxels");
 }
 
 void RadiusClusterAlgo::markRadiusNeighbours(const AccVoxel& voxel,
-                                             HashMap2Voxel& voxelMap,
-                                             std::queue<AccVoxel>& queue,
-                                             const PolySurface& surf) {
-  float avgRadius = getAccumulationAverageRadius(voxel, surf);
-  log->add(LogLevel::INFO, "The ", voxel.associatedFaceIds.size(),
-           " faces average radius is ", avgRadius);
-
+                                             std::queue<AccVoxel>& queue) {
+  float avgRadius = getAccumulationAverageRadius(voxel);
   std::vector<std::tuple<int, int, int>> neighbors = generateVoxelNeighbors(1);
 
   for (const auto& [dx, dy, dz] : neighbors) {
@@ -269,53 +244,21 @@ void RadiusClusterAlgo::markRadiusNeighbours(const AccVoxel& voxel,
   }
 }
 
-// // In Polyscope space
-// glm::vec3 RadiusClusterAlgo::getBarycenterByFaceId(polyscope::SurfaceMesh* mesh, size_t faceId) {
-//   // convert to the polyscope face index
-//   size_t start = mesh->faceIndsStart[faceId];
-//   size_t D = mesh->faceIndsStart[faceId + 1] - start; // Dimension
-//   glm::vec3 faceCenter{0., 0., 0.};
-//   for (size_t j = 0; j < D; j++) {
-//     faceCenter += mesh->vertexPositions.data[mesh->faceIndsEntries[start + j]];
-//   }
-//   faceCenter /= D;
-//   log->add(LogLevel::DEBUG, "Get face ", faceId, "'s barycenter: ", faceCenter.x, " ", faceCenter.y, " ",
-//   faceCenter.z); return faceCenter;
-// }
-// float RadiusClusterAlgo::getAverageRadiusByAccumulation(const AccVoxel& voxel, polyscope::SurfaceMesh* mesh) {
-//   auto voxelPos = voxel.position;
-//   float radius = 0.1f;
-//   int count = 0;
-//   for (auto fid : voxel.associatedFaceIds) {
-//     // 1. get the face center
-//     auto faceBarycenter = getBarycenterByFaceId(mesh, fid);
-//     // 2. get the distance between the face center and the current voxel
-//     auto distance = glm::distance(faceBarycenter, glm::vec3(voxelPos[0], voxelPos[1], voxelPos[2]));
-//     // log->add(LogLevel::DEBUG, "The ", count++, " = ", distance);
-//     radius += distance;
-//   }
-//   radius = radius / voxel.associatedFaceIds.size();
-//   log->add(LogLevel::INFO, "Get the average radius of the voxel ", voxelPos[0], " ", voxelPos[1], " ", voxelPos[2],
-//            " which has ", voxel.associatedFaceIds.size(), " faces and distance is ", radius);
-//   return radius;
-// }
-
 // In DGtal space
 DGtal::Z3i::RealPoint RadiusClusterAlgo::getFaceBarycenter(
-    const PolySurface& surf, const PolySurface::Face& aFace) {
+    const PolySurface::Face& aFace) {
   DGtal::Z3i::RealPoint res(0.0, 0.0, 0.0);
   for (auto const& v : surf.verticesAroundFace(aFace)) {
     res += surf.position(v);
   }
   return res / surf.verticesAroundFace(aFace).size();
 }
-float RadiusClusterAlgo::getAccumulationAverageRadius(const AccVoxel& voxel,
-                                                      const PolySurface& surf) {
+float RadiusClusterAlgo::getAccumulationAverageRadius(const AccVoxel& voxel) {
   auto voxelPos = voxel.position;
   float radius = 0.1f;
   for (auto fid : voxel.associatedFaceIds) {
     // 1. get the face center
-    auto faceBarycenter = getFaceBarycenter(surf, fid);
+    auto faceBarycenter = getFaceBarycenter(fid);
     // 2. get the distance between the face center and the current voxel
     auto distance = glm::distance(
         glm::vec3(faceBarycenter[0], faceBarycenter[1], faceBarycenter[2]),
@@ -323,16 +266,13 @@ float RadiusClusterAlgo::getAccumulationAverageRadius(const AccVoxel& voxel,
     radius += distance;
   }
   radius = radius / voxel.associatedFaceIds.size();
-  log->add(LogLevel::DEBUG, "Get the average radius of the voxel ", voxelPos[0],
-           " ", voxelPos[1], " ", voxelPos[2], " which has ",
+  log->add(LogLevel::DEBUG, "DEBUG: Get the average radius of the voxel ",
+           voxelPos[0], " ", voxelPos[1], " ", voxelPos[2], " which has ",
            voxel.associatedFaceIds.size(), " faces and distance is ", radius);
   return radius;
 }
 
-template <typename TypePQ>
-void RadiusClusterAlgo::markStaticRadiusAccLabel(
-    HashMap2Voxel& voxelMap, TypePQ& globalPQ, DGtalUint& clusterLabel,
-    std::vector<std::vector<DGtalUint>>& cluster, const PolySurface& surf) {
+void RadiusClusterAlgo::markStaticRadiusAccLabel() {
 
   std::queue<AccVoxel> localQ;                  // maintain the local visited:
   cluster.push_back(std::vector<DGtalUint>());  // init the empty cluster
@@ -340,20 +280,20 @@ void RadiusClusterAlgo::markStaticRadiusAccLabel(
   DGtalUint countPush = 0;
 
   for (auto v : voxelMap)
-    globalPQ.push(v.second);
-  log->add(LogLevel::INFO, "//////////////////////////////////////////////");
-  log->add(LogLevel::INFO, "Loaded global queue size is ", globalPQ.size());
+    accPQ.push(v.second);
+  log->add(LogLevel::INFO, "START: SRA load global queue size is ",
+           accPQ.size());
 
   // LOOP I: get a voxel with the current highest votes from the PQ
-  while (!globalPQ.empty()) {
-    auto vCurrent = globalPQ.top();
+  while (!accPQ.empty()) {
+    auto vCurrent = accPQ.top();
     auto pCurrent = vCurrent.position;
     auto idCurrent = accumulationHash(vCurrent.position);
 
     if (voxelMap.at(idCurrent).visited) {
-      globalPQ.pop();
+      accPQ.pop();
       log->add(LogLevel::DEBUG, "Pop(G): ", pCurrent, " and remain ",
-               globalPQ.size());
+               accPQ.size());
       continue;
     }
 
@@ -370,15 +310,15 @@ void RadiusClusterAlgo::markStaticRadiusAccLabel(
              " and set visited");
     log->add(LogLevel::DEBUG, "Current cluster center is ", pCurrent, " -> ",
              vCurrent.label);
-    log->add(LogLevel::DEBUG, "Remain(G): ", globalPQ.size());
+    log->add(LogLevel::DEBUG, "Remain(G): ", accPQ.size());
 
     // LOOP II: traverse the adjacent voxels
 
     // int radius = static_cast<int>(std::round(getAverageRadiusByAccumulation(vCurrent, mesh)));
-    int radius = static_cast<int>(
-        std::round(getAccumulationAverageRadius(vCurrent, surf)));
+    int radius =
+        static_cast<int>(std::round(getAccumulationAverageRadius(vCurrent)));
 
-    markVoxelNeighbours(vCurrent, voxelMap, localQ, radius);  // static radius
+    markVoxelNeighbours(vCurrent, localQ, radius);  // static radius
     // markRadiusNeighbours(vCurrent, mapVoxel, localQ, surf); // dynamic radius
 
     while (!localQ.empty()) {
@@ -401,17 +341,14 @@ void RadiusClusterAlgo::markStaticRadiusAccLabel(
       voxelMap.at(idAdjacent).visited = true;
       cluster[clusterLabel].push_back(idAdjacent);
       localQ.pop();
-      // markNeighbours(vAdjacent, mapVoxel, localQ);
     }
   }
-  log->add(LogLevel::INFO, "FINISH: Have ", cluster.size(), " size");
   log->add(LogLevel::INFO, "FINISH: Found ", clusterLabel, " clusters");
 }
 
 // In DGtal space
 // Check if the face f is sharing edge with the current faceId
-bool RadiusClusterAlgo::isSharingEdge(const PolySurface& surf,
-                                      PolySurface::Face faceId,
+bool RadiusClusterAlgo::isSharingEdge(PolySurface::Face faceId,
                                       PolySurface::Face f) {
   auto v1 = surf.verticesAroundFace(faceId);
   auto v2 = surf.verticesAroundFace(f);
@@ -424,7 +361,7 @@ bool RadiusClusterAlgo::isSharingEdge(const PolySurface& surf,
   return count == 2;
 }
 std::vector<PolySurface::Face> RadiusClusterAlgo::getNeighborFacesByFaceId(
-    const PolySurface& surf, PolySurface::Face faceId, size_t ring) {
+    PolySurface::Face faceId, size_t ring) {
 
   std::vector<PolySurface::Face> result;
   std::unordered_set<PolySurface::Face> fVisited;
@@ -433,7 +370,7 @@ std::vector<PolySurface::Face> RadiusClusterAlgo::getNeighborFacesByFaceId(
   for (const auto& v : surf.verticesAroundFace(faceId)) {
     log->add(LogLevel::DEBUG, "处理面 ", faceId, " 的一个顶点 ", v);
     for (const auto& f : surf.facesAroundVertex(v)) {
-      if (f != faceId && isSharingEdge(surf, faceId, f)) {
+      if (f != faceId && isSharingEdge(faceId, f)) {
         if (!fVisited.count(f)) {
           fVisited.insert(f);
           result.push_back(f);
@@ -451,13 +388,12 @@ std::vector<PolySurface::Face> RadiusClusterAlgo::getNeighborFacesByFaceId(
   return result;
 }
 std::queue<AccVoxel> RadiusClusterAlgo::getCenterFacesVoxels(
-    const AccVoxel& centerVoxel, const PolySurface& surf,
-    HashMap2Voxel& voxelMap, FaceMap2Voxels& faceMap) {
+    const AccVoxel& centerVoxel) {
 
   std::queue<AccVoxel> localQ;
 
   for (auto f : centerVoxel.associatedFaceIds) {
-    auto neighborFaces = getNeighborFacesByFaceId(surf, f, 1);
+    auto neighborFaces = getNeighborFacesByFaceId(f, 1);
     for (auto nf : neighborFaces) {
       auto itf = faceMap.find(nf);
       if (itf == faceMap.end()) {
@@ -484,34 +420,30 @@ std::queue<AccVoxel> RadiusClusterAlgo::getCenterFacesVoxels(
 // 1) strategy: using the result we computed based on the simple radius
 // 2) strategy: starting from the highest accumulation voxel again
 // Find the neighbor faces based on the face id(intermediate element is all around vertices)
-template <typename TypePQ>
-void RadiusClusterAlgo::markDynamicRadiusAccLabel(
-    HashMap2Voxel& voxelMap, TypePQ& globalPQ, DGtalUint& clusterLabel,
-    std::vector<std::vector<DGtalUint>>& cluster, const PolySurface& surf,
-    FaceMap2Voxels faceMap) {
+void RadiusClusterAlgo::markDynamicRadiusAccLabel() {
 
   std::queue<AccVoxel> localQ;
   // Init the empty cluster(cluster 0 doesn't be used)
   cluster.push_back(std::vector<DGtalUint>());
   clusterLabel = 0;
   // Initialize the PQ and cluster
-  if (!globalPQ.empty()) {
-    globalPQ = std::priority_queue<AccVoxel>();
+  if (!accPQ.empty()) {
+    accPQ = std::priority_queue<AccVoxel>();
   }
   for (auto v : voxelMap)
-    globalPQ.push(v.second);
-  log->add(LogLevel::INFO, "Starting DRA and loading global queue size is ",
-           globalPQ.size());
+    accPQ.push(v.second);
+  log->add(LogLevel::INFO, "START: DRA loading global queue size is ",
+           accPQ.size());
 
   // 1. In the loop, using priority queue to pop all candidate voxel
-  while (!globalPQ.empty()) {
-    auto vCurrent = globalPQ.top();
+  while (!accPQ.empty()) {
+    auto vCurrent = accPQ.top();
     auto pCurrent = vCurrent.position;
     auto idCurrent = accumulationHash(vCurrent.position);
 
     // Add a new cluster
     if (voxelMap.at(idCurrent).visited) {
-      globalPQ.pop();
+      accPQ.pop();
       continue;
     }
     voxelMap.at(idCurrent).visited = true;
@@ -521,9 +453,9 @@ void RadiusClusterAlgo::markDynamicRadiusAccLabel(
     cluster[clusterLabel].push_back(idCurrent);
 
     // For each unvisited center voxel, store all associated faces' voxel in vector
-    int radius = static_cast<int>(
-        std::round(getAccumulationAverageRadius(vCurrent, surf)));
-    localQ = getCenterFacesVoxels(vCurrent, surf, voxelMap, faceMap);
+    int radius =
+        static_cast<int>(std::round(getAccumulationAverageRadius(vCurrent)));
+    localQ = getCenterFacesVoxels(vCurrent);
 
     // 2. In the local loop, traverse the candidate secondary associated voxels
     while (!localQ.empty()) {
@@ -532,12 +464,14 @@ void RadiusClusterAlgo::markDynamicRadiusAccLabel(
       auto idAssociated = accumulationHash(vAssociated.position);
 
       // If the distance between the candidate voxel and the associated voxel is larger than the radius
-      if (glm::distance(
-              glm::vec3(pAssociated[0], pAssociated[1], pAssociated[2]),
-              glm::vec3(pCurrent[0], pCurrent[1], pCurrent[2])) > radius) {
+      if (auto dis =
+              glm::distance(
+                  glm::vec3(pAssociated[0], pAssociated[1], pAssociated[2]),
+                  glm::vec3(pCurrent[0], pCurrent[1], pCurrent[2])) > radius) {
         localQ.pop();
         log->add(LogLevel::INFO, "Removing outlier [", clusterLabel,
-                 "] : ", pAssociated);
+                 "] : ", pAssociated, "because of the distance is ", dis,
+                 " and radius is ", radius);
         continue;
       }
       // 3. For each face, get all shared face neighbor faces' voxel and store in the local vector
@@ -560,7 +494,6 @@ void RadiusClusterAlgo::markDynamicRadiusAccLabel(
     }
   }
 
-  log->add(LogLevel::INFO, "FINISH: Have ", cluster.size(), " size");
   log->add(LogLevel::INFO, "FINISH: Found ", clusterLabel, " clusters");
 }
 

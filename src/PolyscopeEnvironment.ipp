@@ -74,7 +74,7 @@ void Manager::addPointCloud(const std::string& structName,
 
   {
     // polyscope::loadColorMap("sampleColorMap",
-    // "/home/adam/Desktop/AccumulationSpace/samples/sample_colormap.png");
+    // "AccumulationSpace/samples/sample_colormap.png");
   }
 }
 Manager::~Manager() {
