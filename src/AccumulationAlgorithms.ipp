@@ -1,4 +1,5 @@
 #include <cstddef>
+#include <queue>
 #include <system_error>
 #include <unordered_map>
 #include <vector>
@@ -387,13 +388,12 @@ std::vector<PolySurface::Face> RadiusClusterAlgo::getNeighborFacesByFaceId(
   }
   return result;
 }
-std::queue<AccVoxel> RadiusClusterAlgo::getCenterFacesVoxels(
-    const AccVoxel& centerVoxel) {
 
-  std::queue<AccVoxel> localQ;
+void RadiusClusterAlgo::pushValidCentervoxelAssociatedVoxelsIntoQueue(
+    const AccVoxel& centerVoxel, std::queue<AccVoxel>& queue, int ring) {
 
   for (auto f : centerVoxel.associatedFaceIds) {
-    auto neighborFaces = getNeighborFacesByFaceId(f, 1);
+    auto neighborFaces = getNeighborFacesByFaceId(f, ring);
     for (auto nf : neighborFaces) {
       auto itf = faceMap.find(nf);
       if (itf == faceMap.end()) {
@@ -409,12 +409,41 @@ std::queue<AccVoxel> RadiusClusterAlgo::getCenterFacesVoxels(
                    " 没找到的对应voxel的情况");
           continue;
         }
-        // 去重检查
-        localQ.push(itv->second);
+        // skip visied/centre/flag!=0 voxel
+        auto& voxelTemp = itv->second;
+        auto& posTemp = voxelTemp.position;
+        if (!voxelTemp.visited && posTemp != centerVoxel.position &&
+            voxelTemp.label == 0) {
+          // 可能会有和之前queue内重复的情况，但是我们的外部算法有判别
+          voxelTemp.label = centerVoxel.label;
+          queue.push(itv->second);
+        }
       }
     }
   }
-  return localQ;
+}
+
+void RadiusClusterAlgo::pushValidCentervoxelNeigborsIntoQueue(
+    const AccVoxel& centerVoxel, std::queue<AccVoxel>& queue, int ring) {
+  std::vector<std::tuple<int, int, int>> neighborRelation =
+      generateVoxelNeighbors(ring);
+
+  for (const auto& [dx, dy, dz] : neighborRelation) {
+    DGtalPoint3D posTemp(centerVoxel.position[0] + dx,
+                         centerVoxel.position[1] + dy,
+                         centerVoxel.position[2] + dz);
+    auto idTemp = AccumulationSpace::accumulationHash(posTemp);
+
+    if (mapKeychecker(voxelMap, idTemp)) {
+      auto& voxelTemp = voxelMap.at(idTemp);
+      // skip visied/centre/flag!=0 voxel
+      if (!voxelTemp.visited && posTemp != centerVoxel.position &&
+          voxelTemp.label == 0) {
+        voxelTemp.label = centerVoxel.label;
+        queue.push(voxelTemp);
+      }
+    }
+  }
 }
 
 // 1) strategy: using the result we computed based on the simple radius
@@ -426,7 +455,6 @@ void RadiusClusterAlgo::markDynamicRadiusAccLabel() {
   // Init the empty cluster(cluster 0 doesn't be used)
   cluster.push_back(std::vector<DGtalUint>());
   clusterLabel = 0;
-  // Initialize the PQ and cluster
   if (!accPQ.empty()) {
     accPQ = std::priority_queue<AccVoxel>();
   }
@@ -435,7 +463,7 @@ void RadiusClusterAlgo::markDynamicRadiusAccLabel() {
   log->add(LogLevel::INFO, "START: DRA loading global queue size is ",
            accPQ.size());
 
-  // 1. In the loop, using priority queue to pop all candidate voxel
+  // LOOP 1: pop current maximum votes voxel
   while (!accPQ.empty()) {
     auto vCurrent = accPQ.top();
     auto pCurrent = vCurrent.position;
@@ -452,39 +480,34 @@ void RadiusClusterAlgo::markDynamicRadiusAccLabel() {
     cluster.push_back(std::vector<DGtalUint>());
     cluster[clusterLabel].push_back(idCurrent);
 
-    // For each unvisited center voxel, store all associated faces' voxel in vector
+    // For each unvisited center voxel, push all valid neighbors and associated voxels(the incident maximum votes voxel of all associated faces) into the local queue
     int radius =
         static_cast<int>(std::round(getAccumulationAverageRadius(vCurrent)));
-    localQ = getCenterFacesVoxels(vCurrent);
+    pushValidCentervoxelNeigborsIntoQueue(vCurrent, localQ, radius);
+    pushValidCentervoxelAssociatedVoxelsIntoQueue(vCurrent, localQ, 1);
 
-    // 2. In the local loop, traverse the candidate secondary associated voxels
+    // LOOP 2: traverse the candidate voxel of local queue
     while (!localQ.empty()) {
       auto vAssociated = localQ.front();
       auto pAssociated = vAssociated.position;
       auto idAssociated = accumulationHash(vAssociated.position);
 
       // If the distance between the candidate voxel and the associated voxel is larger than the radius
-      if (auto dis =
-              glm::distance(
-                  glm::vec3(pAssociated[0], pAssociated[1], pAssociated[2]),
-                  glm::vec3(pCurrent[0], pCurrent[1], pCurrent[2])) > radius) {
+      auto dis = glm::distance(
+          glm::vec3(pAssociated[0], pAssociated[1], pAssociated[2]),
+          glm::vec3(pCurrent[0], pCurrent[1], pCurrent[2]));
+      if (dis > 1.5 * radius) {
         localQ.pop();
-        log->add(LogLevel::INFO, "Removing outlier [", clusterLabel,
-                 "] : ", pAssociated, "because of the distance is ", dis,
+        log->add(LogLevel::INFO, "Remove: outlier [", clusterLabel,
+                 "] : ", pAssociated, " because of the distance is ", dis,
                  " and radius is ", radius);
         continue;
       }
-      // 3. For each face, get all shared face neighbor faces' voxel and store in the local vector
-
-      log->add(LogLevel::DEBUG, "Visiting [", clusterLabel,
-               "] : ", pAssociated);
-      log->add(LogLevel::DEBUG, "Remain(L): ", localQ.size());
 
       if (voxelMap.at(idAssociated).visited) {
         localQ.pop();
         continue;
-      }
-      if (voxelMap.at(idAssociated).label == 0)
+      } else if (voxelMap.at(idAssociated).label == 0)
         log->add(LogLevel::ERROR, pAssociated, " is not visited and no label");
 
       // mark visited, store in a cluster and label rest neighbors

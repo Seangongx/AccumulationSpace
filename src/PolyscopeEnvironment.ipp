@@ -496,8 +496,6 @@ void Manager::buildHashMap2Voxels() {
   for (auto voxel : nas.voxelList) {
     globalHashMap[AccumulationSpace::accumulationHash(voxel.position)] = voxel;
   }
-  log->add(LogLevel::INFO,
-           "Finished building HashMap size: ", globalHashMap.size());
 }
 void Manager::buildFaceMap2Voxels() {
   for (size_t i = 0; i < nas.voxelList.size(); i++) {
@@ -506,8 +504,6 @@ void Manager::buildFaceMap2Voxels() {
       globalFaceMap[faceId].push_back(i);
     }
   }
-  log->add(LogLevel::INFO,
-           "Finished building Facemap size: ", globalFaceMap.size());
 }
 
 }  // namespace PolyscopeEnvironment

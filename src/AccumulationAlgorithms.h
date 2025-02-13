@@ -97,11 +97,18 @@ class RadiusClusterAlgo : public ClusterAlgoBase {
   float getAccumulationAverageRadius(const AccVoxel& Voxel);
   std::vector<PolySurface::Face> getNeighborFacesByFaceId(
       PolySurface::Face faceId, size_t ring);
-  std::queue<AccVoxel> getCenterFacesVoxels(const AccVoxel& centerVoxel);
   bool isSharingEdge(PolySurface::Face faceId, PolySurface::Face f);
 
   void markStaticRadiusAccLabel();
   void markDynamicRadiusAccLabel();
+
+  //new methods
+  void pushValidCentervoxelNeigborsIntoQueue(const AccVoxel& voxel,
+                                             std::queue<AccVoxel>& queue,
+                                             int ring);
+
+  void pushValidCentervoxelAssociatedVoxelsIntoQueue(
+      const AccVoxel& centerVoxel, std::queue<AccVoxel>& queue, int ring);
 };
 
 }  // namespace AccumulationAlgorithms
