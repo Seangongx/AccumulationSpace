@@ -8,11 +8,20 @@ endif()
 
 # Require C++17 standard in DGtal
 set(CMAKE_CXX_STANDARD 17) 
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
+# Debug settings
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -g -O0")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
+
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+SET(WITH_LIBIGL ON)
+SET(WITH_CGAL ON)
+SET(WITH_GMP ON)
+include(dgtal)
+include(polyscope)
 
 SET(AS_COMMAND_SRC
     ${PROJECT_SOURCE_DIR}/src/NormalAccumulator.cpp
@@ -26,13 +35,8 @@ SET(AS_TOOLS_SRC
     ${PROJECT_SOURCE_DIR}/src/PolyscopeEnvironment.ipp
 )
 
-# Include DGtal
-SET (DGtal_DIR "/home/liris/DGtal/build")
-find_package(DGtal REQUIRED) #local version installed in machine
-
 # Create an executable
 add_subdirectory(tools)
-add_subdirectory(deps)
 add_executable(segmentFromAcc ${AS_SOURCE_FILE} main.cpp)
 
 # Include settings

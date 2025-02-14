@@ -115,6 +115,7 @@ class Manager {
   float defaultPointTransparency{0.8f};
   float defaultPointRadius{0.01f};
   int defaultAlgoMaxStep{5};
+  int defaultAlgoMaxRadius{5};
   PsColor defaultMeshColor{0.8f, 0.8f, 0.8f};
   std::pair<double, double> defaultColorMapRange;
 
@@ -123,6 +124,7 @@ class Manager {
 
   // Operation settings
   int imguiAlgoStep = 0;
+  int imguiAlgoRadius = 1;
   size_t clickCount = 0;
   size_t selectedElementId = 0;
   std::set<size_t> associatedAccumulationIds;

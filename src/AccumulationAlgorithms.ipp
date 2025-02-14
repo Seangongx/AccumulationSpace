@@ -178,11 +178,13 @@ RadiusClusterAlgo::~RadiusClusterAlgo() {
 void RadiusClusterAlgo::buildCluster(std::vector<AccVoxel>& accList,
                                      size_t thAcc, double thConf,
                                      std::shared_ptr<AccumulationLog> logPtr,
-                                     const PolySurface& polysurface,
-                                     char mode) {
+                                     const PolySurface& polysurface, char mode,
+                                     int radius) {
   log = logPtr;
   voxelList = accList;
   surf = polysurface;
+  radiusDepth = radius;
+
   log->add(LogLevel::INFO, "START: ", typeid(*this).name(),
            " with accumulation thereshold: ", accThreshold,
            " and confidence threshold: ", confThreshold);
@@ -315,7 +317,6 @@ void RadiusClusterAlgo::markStaticRadiusAccLabel() {
 
     // LOOP II: traverse the adjacent voxels
 
-    // int radius = static_cast<int>(std::round(getAverageRadiusByAccumulation(vCurrent, mesh)));
     int radius =
         static_cast<int>(std::round(getAccumulationAverageRadius(vCurrent)));
 
@@ -482,7 +483,8 @@ void RadiusClusterAlgo::markDynamicRadiusAccLabel() {
 
     // For each unvisited center voxel, push all valid neighbors and associated voxels(the incident maximum votes voxel of all associated faces) into the local queue
     int radius =
-        static_cast<int>(std::round(getAccumulationAverageRadius(vCurrent)));
+        static_cast<int>(std::round(getAccumulationAverageRadius(vCurrent))) -
+        radiusDepth;
     pushValidCentervoxelNeigborsIntoQueue(vCurrent, localQ, radius);
     pushValidCentervoxelAssociatedVoxelsIntoQueue(vCurrent, localQ, 1);
 

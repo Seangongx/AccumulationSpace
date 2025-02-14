@@ -273,7 +273,7 @@ void Manager::setImguiCustomPanel() {
     if (accBtnPressed5) {
       AccumulationAlgorithms::RadiusClusterAlgo rca;
       rca.clearCluster();
-      rca.buildCluster(nas.voxelList, 0, 0.0, log, currentPolysurf, 0);
+      rca.buildCluster(nas.voxelList, 0, 0.0, log, currentPolysurf, 0, 0);
       paintCluster(rca);
     } else {
       polyscope::getPointCloud("Cluster Voxels")->setEnabled(false);
@@ -287,7 +287,7 @@ void Manager::setImguiCustomPanel() {
     if (accBtnPressed6) {
       AccumulationAlgorithms::RadiusClusterAlgo rca;
       rca.clearCluster();
-      rca.buildCluster(nas.voxelList, 0, 0.0, log, currentPolysurf, 1);
+      rca.buildCluster(nas.voxelList, 0, 0.0, log, currentPolysurf, 1, 0);
       paintCluster(rca);
     } else {
       polyscope::getPointCloud("Cluster Voxels")->setEnabled(false);
@@ -296,9 +296,14 @@ void Manager::setImguiCustomPanel() {
     }
     accBtnPressed6 = !accBtnPressed6;
   }
-  if (ImGui::SliderInt("Radius length", &imguiAlgoStep, 1,
-                       defaultAlgoMaxStep)) {
-    // TODO
+  if (ImGui::SliderInt("Radius length", &imguiAlgoRadius, 1,
+                       defaultAlgoMaxRadius)) {
+    AccumulationAlgorithms::RadiusClusterAlgo rca;
+    rca.clearCluster();
+    rca.buildCluster(nas.voxelList, 0, 0.0, log, currentPolysurf, 1,
+                     imguiAlgoRadius);
+    promptText = "Radius length: " + std::to_string(imguiAlgoRadius);
+    mouseDragSliderEvent(imguiAlgoRadius, rca);
   }
 
   ImGui::Separator();

@@ -85,11 +85,12 @@ class RadiusClusterAlgo : public ClusterAlgoBase {
   void clearCluster() override;
   void buildCluster(std::vector<AccVoxel>& accList, size_t thAcc, double thConf,
                     std::shared_ptr<AccumulationLog> logPtr,
-                    const PolySurface& polySurface, char mode);
+                    const PolySurface& polySurface, char mode, int radius);
 
   // <Face ID -> Position Hashvalue>
   FaceMap2Voxels faceMap;
   PolySurface surf;
+  int radiusDepth = 0;
 
  private:
   void markRadiusNeighbours(const AccVoxel& voxel, std::queue<AccVoxel>& queue);

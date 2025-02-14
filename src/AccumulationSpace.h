@@ -33,19 +33,21 @@ namespace AccumulationSpace {
 // Type Definitions
 typedef DGtal::uint32_t DGtalUint;
 typedef DGtal::PointVector<1, DGtal::int32_t> Row;
-typedef DGtal::Z3i::Point DGtalPoint3D; // Interger 3D point ( Z3i )
-typedef glm::vec3 GLMPoint3D;           // Used in polyscope
+typedef DGtal::Z3i::Point DGtalPoint3D;  // Interger 3D point ( Z3i )
+typedef glm::vec3 GLMPoint3D;            // Used in polyscope
 
 enum class LogLevel { DEBUG, INFO, WARNING, ERROR };
 
-class AccumulationVoxel;       // Forward declaration
-class AccumulationLog;         // Forward declaration
-class NormalAccumulationSpace; // Forward declaration
+class AccumulationVoxel;        // Forward declaration
+class AccumulationLog;          // Forward declaration
+class NormalAccumulationSpace;  // Forward declaration
 
 // Function Declarations
 std::string logLevelToString(LogLevel level);
-std::pair<size_t, size_t> getMinMaxVotesCountFrom(const std::vector<AccumulationVoxel>& accList);
-std::pair<size_t, size_t> getMinMaxFacesCountFrom(const std::vector<AccumulationVoxel>& accList);
+std::pair<size_t, size_t> getMinMaxVotesCountFrom(
+    const std::vector<AccumulationVoxel>& accList);
+std::pair<size_t, size_t> getMinMaxFacesCountFrom(
+    const std::vector<AccumulationVoxel>& accList);
 size_t accumulationHash(DGtalPoint3D pos);
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -54,18 +56,20 @@ size_t accumulationHash(DGtalPoint3D pos);
  * @brief The class to print and save log messages
  */
 class AccumulationLog {
-public:
+ public:
   AccumulationLog();
   AccumulationLog(std::shared_ptr<std::fstream> fstream);
   AccumulationLog(LogLevel ll, std::shared_ptr<std::fstream> fstream);
-  AccumulationLog(const std::string& logFileName, LogLevel ll, std::shared_ptr<std::fstream> fstream);
+  AccumulationLog(const std::string& logFileName, LogLevel ll,
+                  std::shared_ptr<std::fstream> fstream);
   ~AccumulationLog();
-  void init(const std::string& logFileName, LogLevel ll, std::shared_ptr<std::fstream> fstream);
+  void init(const std::string& logFileName, LogLevel ll,
+            std::shared_ptr<std::fstream> fstream);
   // template function
   template <typename... Args>
   void add(LogLevel level, Args&&... args);
 
-private:
+ private:
   template <typename T>
   void appendToStream(std::ostringstream& oss, T&& arg);
   template <typename T, typename... Args>
@@ -84,7 +88,7 @@ private:
  * @brief The class to store unit information for each voxel
  */
 class AccumulationVoxel {
-public:
+ public:
   DGtalPoint3D position = DGtalPoint3D(0, 0, 0);
   DGtalUint votes = 0;
   DGtalUint label = 0;
@@ -93,13 +97,16 @@ public:
   std::vector<DGtalUint> associatedFaceIds;
 
   AccumulationVoxel();
-  AccumulationVoxel(DGtalPoint3D _p, DGtalUint _v, DGtalUint _c, DGtalUint _l, bool _f)
+  AccumulationVoxel(DGtalPoint3D _p, DGtalUint _v, DGtalUint _c, DGtalUint _l,
+                    bool _f)
       : position(_p), votes(_v), confidenceValue(_c), label(_l), visited(_f) {}
 
   /// @brief Defualt compare operator for accumulation votes
   /// @param rhs
   /// @return
-  bool operator<(const AccumulationVoxel& rhs) const { return votes < rhs.votes; }
+  bool operator<(const AccumulationVoxel& rhs) const {
+    return votes < rhs.votes;
+  }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -108,12 +115,13 @@ public:
  * @brief The normal accumulation space of a shape
  */
 class NormalAccumulationSpace {
-public:
+ public:
   NormalAccumulationSpace();
   // NormalAccumulationSpace(const NormalAccumulationSpace& other);
   NormalAccumulationSpace(std::shared_ptr<AccumulationLog> logPtr);
-  NormalAccumulationSpace(const std::string& inputFileName, std::shared_ptr<AccumulationLog> logPtr);
-  ~NormalAccumulationSpace(){};
+  NormalAccumulationSpace(const std::string& inputFileName,
+                          std::shared_ptr<AccumulationLog> logPtr);
+  ~NormalAccumulationSpace() {};
 
   void buildFromFile(const std::string& inputFileName);
 
@@ -123,7 +131,7 @@ public:
   std::pair<size_t, size_t> rangeFaceCount;
   std::shared_ptr<AccumulationLog> log;
 
-private:
+ private:
   /// @brief Read **extracted file from CDCVAM** includes accumulation and
   /// confidence \n
   /// @brief Warning: using old version of DGtal may read 1 more repeated last
@@ -134,6 +142,6 @@ private:
   void getPointsFromVoxelList();
 };
 
-} // namespace AccumulationSpace
+}  // namespace AccumulationSpace
 
-#endif // ACCUMULATIONSPACE_H
+#endif  // ACCUMULATIONSPACE_H
