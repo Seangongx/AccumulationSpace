@@ -40,7 +40,7 @@ AccumulationLog::AccumulationLog(const std::string& logFileName, LogLevel ll,
 AccumulationLog::~AccumulationLog() {
   if ((*filePtr) && filePtr->is_open()) {
     add(LogLevel::INFO, "LOG: Close at ", Timer::now());
-    filePtr->close();
+    //filePtr->close();
   }
 }
 void AccumulationLog::init(const std::string& logFileName, LogLevel ll,

@@ -305,6 +305,20 @@ void Manager::setImguiCustomPanel() {
     promptText = "Radius length: " + std::to_string(imguiAlgoRadius);
     mouseDragSliderEvent(imguiAlgoRadius, rca);
   }
+  if (ImGui::Button(accBtnPressed7 ? "Show adaptive radius clusters"
+                                   : "Hide adaptive radius clusters")) {
+    if (accBtnPressed7) {
+      AccumulationAlgorithms::RadiusClusterAlgo rca;
+      rca.clearCluster();
+      rca.buildCluster(nas.voxelList, 0, 0.0, log, currentPolysurf, 2, 0);
+      paintCluster(rca);
+    } else {
+      polyscope::getPointCloud("Cluster Voxels")->setEnabled(false);
+      polyscope::getSurfaceMesh(defaultRegisteredMeshName)
+          ->removeQuantity("Cluster faces color");
+    }
+    accBtnPressed7 = !accBtnPressed7;
+  }
 
   ImGui::Separator();
 }

@@ -6,11 +6,7 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/src/**",
-                "${workspaceFolder}/deps/**",
-                "${workspaceFolder}/deps/polyscope/deps/glm/glm/**",
-                "${workspaceFolder}/deps/DGtal/src/**",
-                "${workspaceFolder}/deps/DGtal/src/DGtal/**",
-                "/usr/lib/llvm-14/include/**"
+                "/usr/lib/llvm-19/include/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang++",

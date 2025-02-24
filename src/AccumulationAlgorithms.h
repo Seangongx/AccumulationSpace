@@ -60,6 +60,13 @@ class ClusterAlgoBase {
   double confThreshold = 0.0f;
 };
 
+struct ScoreComparator {
+  bool operator()(const AccVoxel a, const AccVoxel b) const {
+    // 综合评分 = 累积值 * 空间衰减因子
+    return a.votes < b.votes;
+  }
+};
+
 class NeighbourClusterAlgo : public ClusterAlgoBase {
  public:
   NeighbourClusterAlgo() {};
@@ -92,6 +99,15 @@ class RadiusClusterAlgo : public ClusterAlgoBase {
   PolySurface surf;
   int radiusDepth = 0;
 
+  // Default parameters for adaptive radius accumulation segmentation
+  float DEFAULT_RMAX = 4.0f;    // 4*delta 单位：体素边长 [1~5]
+  float DEFAULT_LAMBDA = 0.3f;  // 平衡累积值与空间分布
+  float DEFAULT_ALPHA = 0.8f;   // 动态半径基础系数
+  float DEFAULT_TAU_V = 0.25f;  // 25%差异允许
+  float DEFAULT_TAU_D = 2.5f;   // 单位：体素边长
+  std::priority_queue<AccVoxel, std::vector<AccVoxel>, ScoreComparator>
+      global_queue;
+
  private:
   void markRadiusNeighbours(const AccVoxel& voxel, std::queue<AccVoxel>& queue);
   DGtal::Z3i::RealPoint getFaceBarycenter(const PolySurface::Face& aFace);
@@ -101,7 +117,10 @@ class RadiusClusterAlgo : public ClusterAlgoBase {
   bool isSharingEdge(PolySurface::Face faceId, PolySurface::Face f);
 
   void markStaticRadiusAccLabel();
+
   void markDynamicRadiusAccLabel();
+
+  void markAdaptiveRadiusAccLabel();
 
   //new methods
   void pushValidCentervoxelNeigborsIntoQueue(const AccVoxel& voxel,
@@ -110,6 +129,10 @@ class RadiusClusterAlgo : public ClusterAlgoBase {
 
   void pushValidCentervoxelAssociatedVoxelsIntoQueue(
       const AccVoxel& centerVoxel, std::queue<AccVoxel>& queue, int ring);
+
+  float computerSpaceGradient(const DGtalPoint3D& v);
+  void initializeAdaptivePriorityQueue();
+  void updateAdaptivePriorityQueue();
 };
 
 }  // namespace AccumulationAlgorithms

@@ -79,6 +79,7 @@ class Manager {
   bool accBtnPressed4 = true;
   bool accBtnPressed5 = true;
   bool accBtnPressed6 = true;
+  bool accBtnPressed7 = true;
 
  private:
   size_t convertMeshElementIdInPolyscope(size_t elementId);

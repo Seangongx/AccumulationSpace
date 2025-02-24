@@ -211,6 +211,9 @@ void RadiusClusterAlgo::buildCluster(std::vector<AccVoxel>& accList,
     case 1:
       markDynamicRadiusAccLabel();
       break;
+    case 2:
+      markAdaptiveRadiusAccLabel();
+      break;
     default:
       log->add(LogLevel::ERROR, "Invalid mode");
   }
@@ -519,6 +522,136 @@ void RadiusClusterAlgo::markDynamicRadiusAccLabel() {
     }
   }
 
+  log->add(LogLevel::INFO, "FINISH: Found ", clusterLabel, " clusters");
+}
+
+float RadiusClusterAlgo::computerSpaceGradient(const DGtalPoint3D& v) {
+  // 获取邻近体素（需处理边界情况）
+  auto x_prev = DGtalPoint3D(v[0] - 1, v[1], v[2]);
+  auto x_next = DGtalPoint3D(v[0] + 1, v[1], v[2]);
+  auto y_prev = DGtalPoint3D(v[0], v[1] - 1, v[2]);
+  auto y_next = DGtalPoint3D(v[0], v[1] + 1, v[2]);
+  auto z_prev = DGtalPoint3D(v[0], v[1], v[2] - 1);
+  auto z_next = DGtalPoint3D(v[0], v[1], v[2] + 1);
+
+  float xp = voxelMap.find(accumulationHash(x_prev)) == voxelMap.end()
+                 ? 0
+                 : voxelMap.at(accumulationHash(x_prev)).votes;
+  float xn = voxelMap.find(accumulationHash(x_next)) == voxelMap.end()
+                 ? 0
+                 : voxelMap.at(accumulationHash(x_next)).votes;
+  float yp = voxelMap.find(accumulationHash(y_prev)) == voxelMap.end()
+                 ? 0
+                 : voxelMap.at(accumulationHash(y_prev)).votes;
+  float yn = voxelMap.find(accumulationHash(y_next)) == voxelMap.end()
+                 ? 0
+                 : voxelMap.at(accumulationHash(y_next)).votes;
+  float zp = voxelMap.find(accumulationHash(z_prev)) == voxelMap.end()
+                 ? 0
+                 : voxelMap.at(accumulationHash(z_prev)).votes;
+  float zn = voxelMap.find(accumulationHash(z_next)) == voxelMap.end()
+                 ? 0
+                 : voxelMap.at(accumulationHash(z_next)).votes;
+
+  log->add(LogLevel::INFO, "x_prev votes: ", xp);
+  log->add(LogLevel::INFO, "x_next votes: ", xn);
+  log->add(LogLevel::INFO, "y_prev votes: ", yp);
+  log->add(LogLevel::INFO, "y_next votes: ", yn);
+  log->add(LogLevel::INFO, "z_prev votes: ", zp);
+  log->add(LogLevel::INFO, "z_next votes: ", zn);
+
+  // 计算偏导数
+  float delta = 1;
+  float dx = (xn - xp) / (2 * delta);
+  float dy = (yn - yp) / (2 * delta);
+  float dz = (zn - zp) / (2 * delta);
+
+  // 计算梯度模长
+  return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+void RadiusClusterAlgo::initializeAdaptivePriorityQueue() {
+  if (!global_queue.empty()) {  // clear the global queue
+    global_queue =
+        std::priority_queue<AccVoxel, std::vector<AccVoxel>, ScoreComparator>();
+  }
+  for (auto v : voxelMap)
+    global_queue.push(v.second);
+  log->add(LogLevel::INFO, "START: DRA loading adaptive global queue size is ",
+           global_queue.size());
+}
+void RadiusClusterAlgo::updateAdaptivePriorityQueue() {}
+
+void RadiusClusterAlgo::markAdaptiveRadiusAccLabel() {
+
+  std::queue<AccVoxel> localQ;
+  // Init the empty cluster(cluster 0 doesn't be used)
+  cluster.push_back(std::vector<DGtalUint>());
+  clusterLabel = 0;
+  initializeAdaptivePriorityQueue();  // init the global queue
+
+  // LOOP 1: pop current maximum votes voxel
+  while (!global_queue.empty()) {
+    auto vCurrent = global_queue.top();
+    auto pCurrent = vCurrent.position;
+    auto idCurrent = accumulationHash(vCurrent.position);
+
+    // Add a new cluster
+    if (voxelMap.at(idCurrent).visited) {
+      global_queue.pop();
+      continue;
+    }
+    voxelMap.at(idCurrent).visited = true;
+    voxelMap.at(idCurrent).label = ++clusterLabel;
+    vCurrent.label = clusterLabel;
+    cluster.push_back(std::vector<DGtalUint>());
+    cluster[clusterLabel].push_back(idCurrent);
+
+    // 此处计算半径
+    float grad_norm = computerSpaceGradient(pCurrent);
+    float R_max =
+        static_cast<int>(std::round(getAccumulationAverageRadius(vCurrent)));
+    int radius =
+        static_cast<int>(std::min(DEFAULT_ALPHA / (grad_norm + 1e-5f), R_max));
+
+    // LOOP 2: traverse the candidate voxel of local queue
+    while (!localQ.empty()) {
+      auto vAssociated = localQ.front();
+      auto pAssociated = vAssociated.position;
+      auto idAssociated = accumulationHash(vAssociated.position);
+
+      // If the distance between the candidate voxel and the associated voxel is larger than the radius
+      // 此处进行空间近邻检查
+      auto dis = glm::distance(
+          glm::vec3(pAssociated[0], pAssociated[1], pAssociated[2]),
+          glm::vec3(pCurrent[0], pCurrent[1], pCurrent[2]));
+      if (dis > radius) {
+        localQ.pop();
+        log->add(LogLevel::INFO, "Remove: outlier [", clusterLabel,
+                 "] : ", pAssociated, " because of the distance is ", dis,
+                 " and radius is ", radius);
+        continue;
+      }
+
+      if (voxelMap.at(idAssociated).visited) {
+        localQ.pop();
+        continue;
+      } else if (voxelMap.at(idAssociated).label == 0)
+        log->add(LogLevel::ERROR, pAssociated, " is not visited and no label");
+
+      // 此处添加近邻检查
+      pushValidCentervoxelNeigborsIntoQueue(vCurrent, localQ, radius);
+      pushValidCentervoxelAssociatedVoxelsIntoQueue(vCurrent, localQ, 1);
+      // mark visited, store in a cluster and label rest neighbors
+      voxelMap.at(idAssociated).visited = true;
+      cluster[clusterLabel].push_back(idAssociated);
+      localQ.pop();
+    }
+    updateAdaptivePriorityQueue();
+  }
+
+  // 后处理：聚类合并
+  //mergeClusters();
   log->add(LogLevel::INFO, "FINISH: Found ", clusterLabel, " clusters");
 }
 

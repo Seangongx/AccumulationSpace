@@ -28,11 +28,11 @@
  */
 
 ///////////////////////////////////////////////////////////////////////////////
+#include <sys/stat.h>
+#include <string>
 #include "CLI11.hpp"
 #include "PolyscopeEnvironment.h"
 #include "PolyscopeEnvironment.ipp"
-#include <string>
-#include <sys/stat.h>
 ///////////////////////////////////////////////////////////////////////////////
 using namespace std;
 using namespace DGtal;
@@ -87,29 +87,37 @@ int main(int argc, char** argv) {
 
   // parse command line using CLI ----------------------------------------------
   CLI::App app;
-  app.description("polyAccEdit tools to display an accumulation voxel set (Using point "
-                  "cloud for this experiement) calculated from a mesh. Click an "
-                  "accumulation voxel inside the mesh or a triangle face on the mesh can "
-                  "visualize the associated faces or voting accumulations on the fly."
-                  "polyAccEdit /Samples/xxx.obj /Samples/xxx.dat \n");
-  app.add_option("-i,--input,1", defaultMeshFile, "an input mesh file in .obj or .off format.")
+  app.description(
+      "polyAccEdit tools to display an accumulation voxel set (Using point "
+      "cloud for this experiement) calculated from a mesh. Click an "
+      "accumulation voxel inside the mesh or a triangle face on the mesh can "
+      "visualize the associated faces or voting accumulations on the fly."
+      "polyAccEdit /Samples/xxx.obj /Samples/xxx.dat \n");
+  app.add_option("-i,--input,1", defaultMeshFile,
+                 "an input mesh file in .obj or .off format.")
       ->required()
       ->check(CLI::ExistingFile);
-  app.add_option("-a,--inputAcc,2", defaultAccFile, "an input accumulation file in .dat format.", true);
-  app.add_option("-l,--logLevel,3", logLevel, "0: DEBUG, 1: INFO, 2: WARNING, 3: ERROR", true);
+  app.add_option("-a,--inputAcc,2", defaultAccFile,
+                 "an input accumulation file in .dat format.", true);
+  app.add_option("-l,--logLevel,3", logLevel,
+                 "0: DEBUG, 1: INFO, 2: WARNING, 3: ERROR", true);
   app.add_option("-m,--logName,4", defaultLogFile, "the log file name", true);
 
   app.get_formatter()->column_width(40);
   CLI11_PARSE(app, argc, argv);
 
   // Initialize log file
-  auto globalLogFileStream = std::make_shared<std::fstream>(defaultLogFile, std::ios::out | std::ios::trunc);
-  AccumulationSpace::AccumulationLog defaultLog(defaultLogFile, logLevel, globalLogFileStream);
+  auto globalLogFileStream = std::make_shared<std::fstream>(
+      defaultLogFile, std::ios::out | std::ios::trunc);
+  AccumulationSpace::AccumulationLog defaultLog(defaultLogFile, logLevel,
+                                                globalLogFileStream);
 
   // Initialize polyscope environment
   std::shared_ptr<AccumulationSpace::AccumulationLog> defaultLogPtr =
       std::make_shared<AccumulationSpace::AccumulationLog>(defaultLog);
-  PolyscopeEnvironment::Manager psManager{defaultMeshFile, defaultAccFile, defaultLogPtr};
+  PolyscopeEnvironment::Manager psManager{defaultMeshFile, defaultAccFile,
+                                          defaultLogPtr};
 
+  polyscope::shutdown();
   return 0;
 }
