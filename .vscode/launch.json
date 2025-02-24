@@ -1,0 +1,20 @@
+{
+    "comment": "Configuration of local project for reference only",
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Accumulation Debug",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${command:cmake.launchTargetPath}/",
+            "args": [
+                "${workspaceFolder}/samples/spot~s21.obj",
+                "${workspaceFolder}/samples/spot~s21r10t2.dat"
+            ],
+            "stopOnEntry": false,
+            "cwd": "${workspaceFolder}",
+            "internalConsoleOptions": "neverOpen",
+            "console": "integratedTerminal"
+        }
+    ]
+}
