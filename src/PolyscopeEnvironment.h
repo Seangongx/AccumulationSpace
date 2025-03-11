@@ -82,6 +82,7 @@ class Manager {
   bool accBtnPressed7 = true;
 
  private:
+  // Helper functions
   size_t convertMeshElementIdInPolyscope(size_t elementId);
   void findLoadedAssociatedAccumulationsByFaceId();
   void storeSelectedAssociatedFacesInMap();
@@ -89,13 +90,14 @@ class Manager {
       std::string& meshName, std::string& quantityName,
       std::unordered_map<size_t, std::vector<DGtalUint>>& faceMap);
   void paintSelectedAssociatedAccumulations();
-  void paintColoredClusterPointsIn(
-      std::string pointCloudName,
-      AccumulationAlgorithms::ClusterAlgoBase& base);
+
+  void paintCluster(AccumulationAlgorithms::ClusterAlgoBase& base);
   void paintColoredClusterFacesOn(
       std::string meshName, std::string quantityName,
       AccumulationAlgorithms::ClusterAlgoBase& base);
-  void paintCluster(AccumulationAlgorithms::ClusterAlgoBase& base);
+  void paintColoredClusterPointsIn(
+      std::string pointCloudName,
+      AccumulationAlgorithms::ClusterAlgoBase& base);
 
   // event functions
   void mouseEventCallback(ImGuiIO& io);
@@ -105,40 +107,52 @@ class Manager {
   void buttonResetSelectedColorFacesEvent();
   void buttonResetSelectedColorVoxelsEvent();
 
-  // Default settings
+  //------------------------------------------------------------------------//
+  // Default setting variables
+
+  // Environment settings
+  float defaultImguiDPIRatio{1.25f};  // for high DPI screen compatibility
+  size_t clickCount = 0;
+  size_t selectedElementId = 0;
+  int faceSelectedId = -1;
+  int voxelSelectedId = -1;
+
+  // Nameing settings
   std::string defaultRegisteredMeshName{"InputMesh"};
   std::string defaultOutputFileName{"result.obj"};
   std::string defaultColorMap{"turbo"};
   std::string defaultMeshColorQuantityName{"default faces color"};
   std::string associatedMeshColorQuantityName{"associated faces color"};
-  float defaultImguiDPIRatio{1.8f};
+
+  // Display settings
   float defaultMeshTransparency{0.4f};
   float defaultPointTransparency{0.8f};
   float defaultPointRadius{0.01f};
-  int defaultAlgoMaxStep{5};
-  int defaultAlgoMaxRadius{5};
   PsColor defaultMeshColor{0.8f, 0.8f, 0.8f};
-  std::pair<double, double> defaultColorMapRange;
+  std::pair<int, int> defaultAccRange{0, 0};
+  std::pair<int, int> imguiAccFilterRange{0, 0};
 
-  DGtal::Mesh<DGtal::Z3i::RealPoint> defaultMesh{true};
-  std::shared_ptr<AccumulationLog> log;
-
-  // Operation settings
+  // Algorithm settings
   int imguiAlgoStep = 0;
   int imguiAlgoRadius = 1;
-  size_t clickCount = 0;
-  size_t selectedElementId = 0;
+  int defaultAlgoMaxStep{5};
+  int defaultAlgoMaxRadius{5};
   std::set<size_t> associatedAccumulationIds;
 
-  int faceSelectedId = -1;
-  int voxelSelectedId = -1;
+  //------------------------------------------------------------------------//
+  // Member variables
 
-  // Accumulation display relevant conponents
-  std::vector<double> accmulationScalarValues;
+  // Algorithm
   // [hashValue, voxelData]
   std::unordered_map<size_t, AccVoxel> globalHashMap;
   // [faceId,voxelId]
   std::unordered_map<size_t, std::vector<DGtalUint>> globalFaceMap;
+
+  //Environment
+  std::vector<double> accmulationScalarValues;
+  DGtal::Mesh<DGtal::Z3i::RealPoint> defaultMesh{true};
+  std::shared_ptr<AccumulationLog> log;
+  std::pair<double, double> defaultColorMapRange;
   NormalAccumulationSpace nas;
   AccumulationAlgorithms::ClusterAlgoBase clusterAlgo;
 };

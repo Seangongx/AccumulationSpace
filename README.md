@@ -44,25 +44,3 @@ change the settings of VSCode Bash
         "GTK_PATH": ""
     }
 ```
-
-
-___lldb_unnamed_symbol29035 (未知源:0)
-___lldb_unnamed_symbol29102 (未知源:0)
-___lldb_unnamed_symbol6686 (未知源:0)
-___lldb_unnamed_symbol6177 (未知源:0)
-___lldb_unnamed_symbol6333 (未知源:0)
-___lldb_unnamed_symbol6335 (未知源:0)
-___lldb_unnamed_symbol6336 (未知源:0)
-polyscope::render::backend_openGL3::GLTextureBuffer::~GLTextureBuffer() (\home\liris\AccumulationSpace\build\_deps\polyscope-src\src\render\opengl\gl_engine.cpp:539)
-polyscope::render::backend_openGL3::GLTextureBuffer::~GLTextureBuffer() (\home\liris\AccumulationSpace\build\_deps\polyscope-src\src\render\opengl\gl_engine.cpp:539)
-std::_Sp_counted_ptr<polyscope::render::backend_openGL3::GLTextureBuffer*, (__gnu_cxx::_Lock_policy)2>::_M_dispose() (\usr\include\c++\12\bits\shared_ptr_base.h:428)
-std::_Sp_counted_base<(__gnu_cxx::_Lock_policy)2>::_M_release() (\usr\include\c++\12\bits\shared_ptr_base.h:346)
-std::__shared_count<(__gnu_cxx::_Lock_policy)2>::~__shared_count() (\usr\include\c++\12\bits\shared_ptr_base.h:1071)
-std::__shared_ptr<polyscope::render::backend_openGL3::GLTextureBuffer, (__gnu_cxx::_Lock_policy)2>::~__shared_ptr() (\usr\include\c++\12\bits\shared_ptr_base.h:1524)
-std::shared_ptr<polyscope::render::backend_openGL3::GLTextureBuffer>::~shared_ptr() (\usr\include\c++\12\bits\shared_ptr.h:175)
-polyscope::render::backend_openGL3::GLShaderTexture::~GLShaderTexture() (\home\liris\AccumulationSpace\build\_deps\polyscope-src\include\polyscope\render\opengl\gl_engine.h:244)
-void std::_Destroy<polyscope::render::backend_openGL3::GLShaderTexture>(polyscope::render::backend_openGL3::GLShaderTexture*) (\usr\include\c++\12\bits\stl_construct.h:151)
-void std::_Destroy_aux<false>::__destroy<polyscope::render::backend_openGL3::GLShaderTexture*>(polyscope::render::backend_openGL3::GLShaderTexture*, polyscope::render::backend_openGL3::GLShaderTexture*) (\usr\include\c++\12\bits\stl_construct.h:163)
-void std::_Destroy<polyscope::render::backend_openGL3::GLShaderTexture*>(polyscope::render::backend_openGL3::GLShaderTexture*, polyscope::render::backend_openGL3::GLShaderTexture*) (\usr\include\c++\12\bits\stl_construct.h:195)
-void std::_Destroy<polyscope::render::backend_openGL3::GLShaderTexture*, polyscope::render::backend_openGL3::GLShaderTexture>(polyscope::render::backend_openGL3::GLShaderTexture*, polyscope::render::backend_openGL3::GLShaderTexture*, std::allocator<polyscope::render::backend_openGL3::GLShaderTexture>&) (\usr\include\c++\12\bits\alloc_traits.h:850)
-std::vector<polyscope::render::backend_openGL3::GLShaderTexture, std::allocator<polyscope::render::backend_openGL3::GLShaderTexture>>::~vector() (\usr\include\c++\12\bits\stl_vector.h:730)

@@ -100,7 +100,7 @@ class RadiusClusterAlgo : public ClusterAlgoBase {
   int radiusDepth = 0;
 
   // Default parameters for adaptive radius accumulation segmentation
-  float DEFAULT_RMAX = 4.0f;    // 4*delta 单位：体素边长 [1~5]
+  float DEFAULT_RMAX = 2.0f;    // 2*delta 单位：体素边长 [1~5]
   float DEFAULT_LAMBDA = 0.3f;  // 平衡累积值与空间分布
   float DEFAULT_ALPHA = 0.8f;   // 动态半径基础系数
   float DEFAULT_TAU_V = 0.25f;  // 25%差异允许

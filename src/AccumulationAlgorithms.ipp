@@ -612,7 +612,8 @@ void RadiusClusterAlgo::markAdaptiveRadiusAccLabel() {
     float R_max =
         static_cast<int>(std::round(getAccumulationAverageRadius(vCurrent)));
     int radius =
-        static_cast<int>(std::min(DEFAULT_ALPHA / (grad_norm + 1e-5f), R_max));
+        DEFAULT_RMAX + (R_max - DEFAULT_RMAX) * std::exp(-1.0f * grad_norm);
+    //static_cast<int>(std::min(DEFAULT_ALPHA / (grad_norm + 1e-5f), R_max));
 
     // LOOP 2: traverse the candidate voxel of local queue
     while (!localQ.empty()) {
