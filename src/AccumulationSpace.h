@@ -123,6 +123,8 @@ class NormalAccumulationSpace {
                           std::shared_ptr<AccumulationLog> logPtr);
   ~NormalAccumulationSpace() {};
 
+  void buildFrom(const std::string& inputFileName,
+                 std::shared_ptr<AccumulationLog> logPtr);
   void buildFromFile(const std::string& inputFileName);
 
   std::vector<AccumulationVoxel> voxelList;

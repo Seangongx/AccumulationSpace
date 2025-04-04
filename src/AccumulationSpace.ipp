@@ -127,6 +127,18 @@ void NormalAccumulationSpace::buildFromFile(const std::string& inputFileName) {
   rangeFaceCount = AccumulationSpace::getMinMaxFacesCountFrom(voxelList);
   log->add(LogLevel::INFO, "Finished building Nomral Accumulation Space(NAS)");
 }
+void NormalAccumulationSpace::buildFrom(
+    const std::string& inputFileName, std::shared_ptr<AccumulationLog> logPtr) {
+  log = logPtr;
+  log->add(LogLevel::INFO, "Initiate Nomral Accumulation Space(NAS) from ",
+           inputFileName);
+
+  getVoxelListFromFile(inputFileName);
+  getPointsFromVoxelList();
+  rangeVoteValue = AccumulationSpace::getMinMaxVotesCountFrom(voxelList);
+  rangeFaceCount = AccumulationSpace::getMinMaxFacesCountFrom(voxelList);
+  log->add(LogLevel::INFO, "Finished building Nomral Accumulation Space(NAS)");
+}
 void NormalAccumulationSpace::getVoxelListFromFile(
     const std::string& filename) {
   auto vOrigins = DGtal::PointListReader<Row>::getPolygonsFromFile(filename);

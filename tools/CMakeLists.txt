@@ -1,5 +1,6 @@
 SET (AS_TOOLS
   polyAccEdit
+  polyMeshEdit
 )
 
 FOREACH(FILE ${AS_TOOLS})

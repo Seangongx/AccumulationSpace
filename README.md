@@ -4,6 +4,7 @@
 1. CMake >= 3.11 
 2. DGtal 1.4 git@github.com:DGtal-team/DGtal.git
 3. polyscope git@github.com:nmwsharp/polyscope.git
+4. Boost required in DGtal
 
 ## How to install 
 1. Git clone this project from the Github

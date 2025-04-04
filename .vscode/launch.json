@@ -8,10 +8,12 @@
             "request": "launch",
             "program": "${command:cmake.launchTargetPath}/",
             "args": [
+                "${workspaceFolder}/samples/noiseCube.obj",
+                "${workspaceFolder}/samples/noiseCube_r20t2.dat"
                 //"${workspaceFolder}/samples/g2sym3sixpanel~s17-6.obj",
-                //"${workspaceFolder}/samples/g2sym3sixpanel~s17-6.dat"
-                "${workspaceFolder}/samples/spot~s21.obj",
-                "${workspaceFolder}/samples/spot~s21r10t2.dat",
+                //"${workspaceFolder}/samples/g2sym3sixpanel~s17-6r15t2.dat"
+                //"${workspaceFolder}/samples/spot~s21.obj",
+                //"${workspaceFolder}/samples/spot~s21r10.dat",
                 //"${workspaceFolder}/samples/spot~s21r10.dat"
             ],
             "stopOnEntry": false,
