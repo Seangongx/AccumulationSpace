@@ -127,6 +127,8 @@ static float minLambda = 0.0;
 static float maxLambda = 1.0;
 static int pNoiseMode = 0;
 static int pNoiseScale = 0;
+static int pImplicitIterations = 1;
+static int pExplicitIterations = 1;
 //
 std::pair<int, int> imguiAccFilterRange;
 std::pair<int, int> defaultAccRange;
@@ -141,6 +143,28 @@ static const int cursorFlag = 1;
 
 static string outputFileName{"result.obj"};
 static string defaultMeshColorQuantityName{"associated faces color"};
+
+static char* files[]{"Balls.obj", "Bunny_head.obj", "Cat_head.obj",
+                     "David328.obj", "Nefertiti_face.obj"};
+
+// struct DataWrapper {
+//   explicit DataWrapper(PolySurface& mesh) : surf(mesh), curvature(mesh) {}
+
+//   PolySurface surf;
+//   pmp_pupa::SurfaceCurvature curvature;
+
+//   int explicit_iterations_{400};
+//   int explicit_iterations_prev_{400};
+//   bool explicit_running_{false};
+
+//   int implicit_iterations_{2};
+//   int implicit_iterations_prev_{2};
+//   bool implicit_running_{false};
+
+//   float lambda_{0.2};
+
+//   bool boundary_smoothing_{false};
+// };
 
 /// Accumulation
 // event state control variables
@@ -267,6 +291,8 @@ void setImguiBegin() {
 }
 
 void setImguiEnd() {
+  ImGui::Separator();
+  ImGui::Text("Debug Information:");
   ImGui::Text("%s", promptText.c_str());
   ImGui::End();
 }
@@ -540,42 +566,6 @@ void setImguiCustomPanel() {
     promptText = "[" + tempVoxels->typeName() + "] Reset voxels color";
   }
 
-  if (ImGui::Button(accBtnPressed2 ? "Hide asscociated accumulations"
-                                   : "Show asscociated accumulations")) {
-    // TODO:
-    // check face selected
-    // currentCachedPointCloud(accumulation voxel) Update
-    accBtnPressed2 = false;
-  } else {
-    accBtnPressed2 = true;
-  }
-  ImGui::SameLine();
-  if (ImGui::Button(accBtnPressed3 ? "Hide voting faces"
-                                   : "Show voting faces")) {
-    // TODO: load file and show all accumulations at once
-    accBtnPressed3 = false;
-  } else {
-    accBtnPressed3 = true;
-  }
-  // thrid line
-  if (ImGui::Button(accBtnPressed4 ? "Hide incident ray"
-                                   : "Show incident ray")) {
-    // check face selected
-    // currentCachedPointCloud(accumulation voxel) updace
-    accBtnPressed4 = false;
-  } else {
-    accBtnPressed4 = true;
-  }
-  ImGui::SameLine();
-  if (ImGui::Button("show associated faces")) {
-    // check if exists one selected voxel
-    // currentCachedDisplayFaces updated
-    accBtnPressed5 = false;
-  } else {
-
-    accBtnPressed5 = true;
-  }
-
   ImGui::Text("Accumulation Filter");
   if (ImGui::DragIntRange2("votes", &imguiAccFilterRange.first,
                            &imguiAccFilterRange.second, 1,
@@ -591,7 +581,6 @@ void setImguiCustomPanel() {
         filterVoxels.push_back(v);
       }
     }
-
     polyscope::removePointCloud("Primary Voxels");
     polyscope::PointCloud* psCloud =
         polyscope::registerPointCloud("Primary Voxels", filterPoints);
@@ -610,16 +599,61 @@ void setImguiCustomPanel() {
   }
 
   ImGui::Separator();
-  ImGui::Text("denoise mode: ");
-  if (ImGui::RadioButton("accumulation", &pNoiseMode, 0)) {}
-  ImGui::SameLine();
-  if (ImGui::RadioButton("laplacian", &pNoiseMode, 1)) {}
-  ImGui::Text("denoise scale: ");
-  if (ImGui::RadioButton("local", &pNoiseScale, 0)) {}
-  ImGui::SameLine();
-  if (ImGui::RadioButton("global", &pNoiseScale, 1)) {}
-  if (ImGui::SliderFloat("stride(lambda)", &pLambda, minLambda, maxLambda,
-                         "%.1f")) {}
+
+  if (ImGui::TreeNode("Denoise menu")) {
+    static int n = 1;
+    ImGui::Combo("Files", &n, files, 5);
+    ImGui::SameLine();
+    if (ImGui::Button("Reload Mesh")) {
+      //data_ = nullptr;
+      //load_mesh(files[n]);
+      //data_ = std::make_shared<MeshViewerData>(mesh_);
+    }
+
+    ImGui::SliderFloat("lambda", &pLambda, 0.01, 0.8);
+
+    ImGui::SliderInt("Implicit iters", &pImplicitIterations, 1, 10);
+    if (ImGui::Button("Implicit Minimal Surf")) {
+      //data_->implicit_running_ = !data_->implicit_running_;
+      //data_->implicit_iterations_prev_ = data_->implicit_iterations_;
+    }
+
+    ImGui::SliderInt("Explicit iters", &pExplicitIterations, 1, 1000);
+    if (ImGui::Button("Explicit Minimal Surf")) {
+      //data_->explicit_running_ = !data_->explicit_running_;
+      //data_->explicit_iterations_prev_ = data_->explicit_iterations_;
+    }
+    //ImGui::SameLine();
+    //ImGui::Checkbox("Boundary Smoothing", &data_->boundary_smoothing_);
+
+    if (ImGui::Button("Update Gaussian Curvature")) {
+      //set_draw_mode("Texture");
+      //auto& k = data_->curvature_.update_gauss_curvature();
+      //curvature_to_texcoord(k, data_->curvature_.max_gauss_curvature());
+
+      //update_mesh();
+    }
+    ImGui::SameLine();
+
+    if (ImGui::Button("Update Mean Curvature")) {
+      // set_draw_mode("Texture");
+      // auto& k = data_->curvature_.update_mean_curvature();
+      // curvature_to_texcoord(k, data_->curvature_.max_mean_curvature());
+      // update_mesh();
+    }
+
+    ImGui::Text("denoise mode: ");
+    if (ImGui::RadioButton("accumulation", &pNoiseMode, 0)) {}
+    ImGui::SameLine();
+    if (ImGui::RadioButton("laplacian", &pNoiseMode, 1)) {}
+    ImGui::Text("denoise scale: ");
+    if (ImGui::RadioButton("local", &pNoiseScale, 0)) {}
+    ImGui::SameLine();
+    if (ImGui::RadioButton("global", &pNoiseScale, 1)) {}
+    if (ImGui::SliderFloat("stride(lambda)", &pLambda, minLambda, maxLambda,
+                           "%.1f")) {}
+    ImGui::TreePop();
+  }
 }
 
 void callbackFaceID() {
