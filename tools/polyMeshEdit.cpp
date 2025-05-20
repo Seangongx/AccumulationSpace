@@ -113,13 +113,13 @@ typedef glm::vec3 PolyPoint;
 typedef vector<PolyPoint> PointLists;
 typedef AccumulationVoxel AccVoxel;
 
-// Default parameters
+// Default parameters (can be changed in the GUI)
 static DGtal::Mesh<DGtal::Z3i::RealPoint> aMesh(true);
 static glm::vec3 defaultColor{0.8f, 0.8f, 0.8f};
 static PolySurface currentPolysurf;
 static PolySurface firstPolysurf;
-const string regMeshName = "Mesh";
-const string regAccName = "Accumulation";
+static string regMeshName = "Mesh";
+static string regAccName = "Accumulation";
 
 /// Surface Editing
 static std::vector<int> vectSelection;
@@ -150,6 +150,21 @@ NormalAccumulationSpace nas;
 // =============================================================
 // ======================== Functions ==========================
 // =============================================================
+
+// Normalize the mesh to fit in a 100 cube, polyscope don't support unit cube
+void normalizeMeshTo100(DGtal::Mesh<DGtal::Z3i::RealPoint>& mesh) {
+  auto bb = mesh.getBoundingBox();
+  auto minPt = bb.first;
+  auto maxPt = bb.second;
+  double maxLen = (maxPt - minPt).norm();
+  if (maxLen == 0)
+    return;  // Avoid division by zero
+  // Normalize the mesh to fit in a 100 cube
+  for (auto it = mesh.vertexBegin(); it != mesh.vertexEnd(); ++it) {
+    *it = (*it - minPt) / maxLen * 100;
+  }
+}
+
 void updateSelection() {
   polyscope::removeStructure("selection");
   auto digsurf = polyscope::getSurfaceMesh("InputMesh");
@@ -237,7 +252,7 @@ void setImguiEnd() {
 }
 
 void setImguiIO(ImGuiIO& io) {
-  float dpiScale = 1.5f;  // DPI ratio
+  float dpiScale = 1.25f;  // DPI ratio
   io.FontGlobalScale = dpiScale;
 }
 
@@ -294,9 +309,9 @@ void setImguiCustomPanel() {
         filterVoxels.push_back(v);
       }
     }
-    polyscope::removePointCloud("Primary Voxels");
+    polyscope::removePointCloud(regAccName.c_str());
     polyscope::PointCloud* psCloud =
-        polyscope::registerPointCloud("Primary Voxels", filterPoints);
+        polyscope::registerPointCloud(regAccName.c_str(), filterPoints);
     psCloud->setPointRadius(0.008);
     // set accmuluation votes as scalar quantity)
     accScalars.resize(filterVoxels.size());
@@ -318,21 +333,21 @@ void setImguiCustomPanel() {
     ImGui::Combo("Files", &n, files, 5);
     ImGui::SameLine();
     if (ImGui::Button("Reload Mesh")) {
-      //data_ = nullptr;
-      //load_mesh(files[n]);
-      //data_ = std::make_shared<MeshViewerData>(mesh_);
-      // reset mesh
-      DGtal::Mesh<DGtal::Z3i::RealPoint> tMesh(true);
-      cout << "Reloading mesh: " << files[n] << endl;
-      tMesh << files[n];
+      // remove previous mesh
       polyscope::removeSurfaceMesh(regMeshName);
       polyscope::removePointCloud(regAccName);
+      // reset mesh
+      DGtal::Mesh<DGtal::Z3i::RealPoint> tMesh(true);
+      string folderPath = filesystem::current_path().string() + "/samples/";
+      tMesh << folderPath + files[n];
+      normalizeMeshTo100(tMesh);
       DGtal::MeshHelpers::mesh2PolygonalSurface(tMesh, currentPolysurf);
-      addSurfaceInPolyscopeFrom(currentPolysurf, regMeshName);
+      addSurfaceInPolyscopeFrom(currentPolysurf, files[n]);
       firstPolysurf = currentPolysurf;
       // reset parameters
       imguiParams.reset();
       imguiParams.promptText = "Reload mesh: " + std::string(files[n]);
+      regMeshName = files[n];
     }
 
     ImGui::SliderFloat("lambda", &imguiParams.pLambda, 0.01, 0.8);
@@ -395,8 +410,8 @@ void callbackFaceID() {
 }
 
 int main(int argc, char** argv) {
-  std::string inputFileName{""};
-  std::string inputAccName{""};
+  string inputMesh{""};
+  string inputAcc{""};
 
   // parse command line using CLI ----------------------------------------------
   CLI::App app;
@@ -406,11 +421,11 @@ int main(int argc, char** argv) {
       "accumulation voxel inside the mesh or a triangle face on the mesh can "
       "visualize the associated faces or voting accumulations on the fly."
       "polyAccEdit /Samples/xxx.obj /Samples/xxx.dat \n");
-  app.add_option("-i,--input,1", inputFileName,
+  app.add_option("-i,--input,1", inputMesh,
                  "an input mesh file in .obj or .off format.")
       ->required()
       ->check(CLI::ExistingFile);
-  app.add_option("-a,--inputAcc,2", inputAccName,
+  app.add_option("-a,--inputAcc,2", inputAcc,
                  "an input accumulation file in .dat format.", true);
 
   app.get_formatter()->column_width(40);
@@ -423,7 +438,7 @@ int main(int argc, char** argv) {
   polyscope::options::buildGui = true;
 
   // read input mesh
-  aMesh << inputFileName;
+  aMesh << inputMesh;
   aMesh.removeIsolatedVertices();
   auto bb = aMesh.getBoundingBox();
 
@@ -445,12 +460,12 @@ int main(int argc, char** argv) {
   auto logStream = make_shared<fstream>(logName, ios::out | ios::trunc);
   AccumulationLog log(logName, LogLevel::INFO, logStream);
   shared_ptr<AccumulationLog> logPtr = std::make_shared<AccumulationLog>(log);
-  if (inputAccName.empty()) {
+  if (inputAcc.empty()) {
     logPtr->add(LogLevel::INFO,
                 "No input accumulation file provided, using default");
   }
   // Build normal accumulation space
-  nas.buildFrom(inputAccName, logPtr);
+  nas.buildFrom(inputAcc, logPtr);
   // pointCloud structure  // Initialize log file
   voxelList = nas.voxelList;
   imguiParams.accFilterRange = nas.rangeVoteValue;

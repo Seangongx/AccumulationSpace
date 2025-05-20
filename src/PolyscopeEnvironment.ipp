@@ -23,7 +23,7 @@ Manager::Manager(const std::string& meshFile, const std::string& accFile,
   imguiAccFilterRange = nas.rangeVoteValue;
 
   polyscope::options::programName =
-      "PolyAccEditAlgo - (DGtalToolsContrib) " + Timer::now();
+      "PolyEdit - (DGtalToolsContrib) " + Timer::now();
   polyscope::init();
   polyscope::options::buildGui = true;
 
