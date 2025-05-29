@@ -118,6 +118,7 @@ static DGtal::Mesh<DGtal::Z3i::RealPoint> aMesh(true);
 static glm::vec3 defaultColor{0.8f, 0.8f, 0.8f};
 static PolySurface currentPolysurf;
 static PolySurface firstPolysurf;
+static DenoiseSurface* denoiseSurface = nullptr;
 static string regMeshName = "Mesh";
 static string regAccName = "Accumulation";
 
@@ -239,6 +240,26 @@ static Z3i::RealPoint getFaceBarycenter(const PolySurface& polysurff,
   return res / polysurff.verticesAroundFace(aFace).size();
 }
 
+void updateSmooth() {
+
+  if (imguiParams.pExplicitRunning && imguiParams.pExplicitIterations > 0) {
+    for (int i = 0; i < 10 && imguiParams.pExplicitIterations > 0; i++) {
+      if (denoiseSurface)
+        denoiseSurface->explicitIterate(imguiParams.pLambda,
+                                        imguiParams.pBoundarySmoothing);
+      imguiParams.pExplicitIterations--;
+    }
+    //update mesh;
+    polyscope::removeSurfaceMesh(regMeshName);
+    addSurfaceInPolyscopeFrom(currentPolysurf, regMeshName);
+  } else if (imguiParams.pExplicitRunning) {
+    imguiParams.pExplicitRunning = false;
+    imguiParams.pExplicitIterations = imguiParams.pExplicitIterations_prev;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 void setImguiBegin() {
   srand((unsigned)time(NULL));
   ImGui::Begin("Editing tools");
@@ -344,6 +365,9 @@ void setImguiCustomPanel() {
       DGtal::MeshHelpers::mesh2PolygonalSurface(tMesh, currentPolysurf);
       addSurfaceInPolyscopeFrom(currentPolysurf, files[n]);
       firstPolysurf = currentPolysurf;
+      if (denoiseSurface)
+        delete denoiseSurface;
+      denoiseSurface = new DenoiseSurface(currentPolysurf);  // 重新new
       // reset parameters
       imguiParams.reset();
       imguiParams.promptText = "Reload mesh: " + std::string(files[n]);
@@ -352,20 +376,31 @@ void setImguiCustomPanel() {
 
     ImGui::SliderFloat("lambda", &imguiParams.pLambda, 0.01, 0.8);
 
-    ImGui::SliderInt("Implicit iters", &imguiParams.pImplicitIterations, 1, 10);
-    if (ImGui::Button("Implicit Minimal Surf")) {
-      //data_->implicit_running_ = !data_->implicit_running_;
-      //data_->implicit_iterations_prev_ = data_->implicit_iterations_;
-    }
-
     ImGui::SliderInt("Explicit iters", &imguiParams.pExplicitIterations, 1,
                      1000);
     if (ImGui::Button("Explicit Minimal Surf")) {
-      //data_->explicit_running_ = !data_->explicit_running_;
-      //data_->explicit_iterations_prev_ = data_->explicit_iterations_;
+      for (int i = 0; i < 10 && imguiParams.pExplicitIterations > 0; i++) {
+        if (denoiseSurface)
+          denoiseSurface->explicitIterate(imguiParams.pLambda,
+                                          imguiParams.pBoundarySmoothing);
+        imguiParams.pExplicitIterations--;
+      }
+      updateSmooth();
+      imguiParams.pExplicitRunning = !imguiParams.pExplicitRunning;
+      imguiParams.pExplicitIterations_prev = imguiParams.pExplicitIterations;
     }
-    //ImGui::SameLine();
-    //ImGui::Checkbox("Boundary Smoothing", &data_->boundary_smoothing_);
+
+    ImGui::SliderInt("Implicit iters", &imguiParams.pImplicitIterations, 1, 10);
+    if (ImGui::Button("Implicit Minimal Surf")) {
+      imguiParams.pImplicitRunning = !imguiParams.pImplicitRunning;
+      imguiParams.pImplicitIterations_prev = imguiParams.pImplicitIterations;
+    }
+
+    if (ImGui::Checkbox("Boundary Smoothing",
+                        &imguiParams.pBoundarySmoothing)) {
+      imguiParams.pBoundarySmoothing = !imguiParams.pBoundarySmoothing;
+      //update_mesh();
+    }
 
     if (ImGui::Button("Update Gaussian Curvature")) {
       //set_draw_mode("Texture");
@@ -452,6 +487,9 @@ int main(int argc, char** argv) {
 
   // Add mesh
   DGtal::MeshHelpers::mesh2PolygonalSurface(aMesh, currentPolysurf);
+  if (denoiseSurface)
+    delete denoiseSurface;
+  denoiseSurface = new DenoiseSurface(currentPolysurf);
   polyscope::state::userCallback = callbackFaceID;
   addSurfaceInPolyscopeFrom(currentPolysurf, regMeshName);
   firstPolysurf = currentPolysurf;
@@ -476,5 +514,7 @@ int main(int argc, char** argv) {
 
   polyscope::show();
 
+  if (denoiseSurface)
+    delete denoiseSurface;
   return 0;
 }
