@@ -242,13 +242,15 @@ static Z3i::RealPoint getFaceBarycenter(const PolySurface& polysurff,
 
 void updateSmooth() {
 
+  if (denoiseSurface == nullptr) {
+    imguiParams.promptText = "ERROR: denoiseSurface is null";
+    cerr << "ERROR: denoiseSurface is null" << endl;
+    return;
+  }
   if (imguiParams.pExplicitRunning && imguiParams.pExplicitIterations > 0) {
-    for (int i = 0; i < 10 && imguiParams.pExplicitIterations > 0; i++) {
-      if (denoiseSurface)
-        denoiseSurface->explicitIterate(imguiParams.pLambda,
-                                        imguiParams.pBoundarySmoothing);
-      imguiParams.pExplicitIterations--;
-    }
+    denoiseSurface->explicitIterate(imguiParams.pLambda,
+                                    imguiParams.pBoundarySmoothing);
+    imguiParams.pExplicitIterations--;
     //update mesh;
     polyscope::removeSurfaceMesh(regMeshName);
     addSurfaceInPolyscopeFrom(currentPolysurf, regMeshName);
@@ -379,15 +381,9 @@ void setImguiCustomPanel() {
     ImGui::SliderInt("Explicit iters", &imguiParams.pExplicitIterations, 1,
                      1000);
     if (ImGui::Button("Explicit Minimal Surf")) {
-      for (int i = 0; i < 10 && imguiParams.pExplicitIterations > 0; i++) {
-        if (denoiseSurface)
-          denoiseSurface->explicitIterate(imguiParams.pLambda,
-                                          imguiParams.pBoundarySmoothing);
-        imguiParams.pExplicitIterations--;
-      }
+      imguiParams.pExplicitIterations_prev = imguiParams.pExplicitIterations;
       updateSmooth();
       imguiParams.pExplicitRunning = !imguiParams.pExplicitRunning;
-      imguiParams.pExplicitIterations_prev = imguiParams.pExplicitIterations;
     }
 
     ImGui::SliderInt("Implicit iters", &imguiParams.pImplicitIterations, 1, 10);
@@ -441,6 +437,7 @@ void callbackFaceID() {
   setImguiIO(io);
   mouseEventCallback(io);
   setImguiEnd();
+  updateSmooth();
   // updateSelection();
 }
 

@@ -1,6 +1,7 @@
 #ifndef DENOISE_H
 #define DENOISE_H
 
+#include <iostream>
 #include <string>
 #include <utility>
 #include "DGtal/helpers/StdDefs.h"
@@ -57,8 +58,10 @@ static double cotan_weight(const PolySurface& mesh, PolySurface::Arc arc) {
 class DenoiseSurface {
  public:
   DenoiseSurface(PolySurface& _mesh) : mesh(_mesh) {
-    eWeight = mesh.makeEdgeMap()(0.0);
-    vLaplace = mesh.makeVertexMap(RealPoint(0.0, 0.0, 0.0));
+    eWeight =
+        PolySurface::IndexedPropertyMap<double>(mesh, mesh.allArcs().size());
+    vLaplace =
+        PolySurface::IndexedPropertyMap<RealPoint>(mesh, mesh.nbVertices());
     for (const auto& e : mesh.allArcs())
       eWeight[e] = std::max(0.1, cotan_weight(mesh, e));
   }
@@ -129,9 +132,11 @@ class DenoiseSurface {
       vLaplace[v] = RealPoint(0, 0, 0);
       for (const auto& arc : mesh.outArcs(v)) {
         w += eWeight[arc];
-        PolySurface::Vertex outv = mesh.tail(arc);
+        PolySurface::Vertex outv = mesh.head(arc);
         vLaplace[v] += eWeight[arc] * (mesh.position(outv) - mesh.position(v));
-        assert(v == mesh.head(arc));
+        //std::cout << "arc: " << arc << ", v: " << v << ", outv: " << outv << std::endl;
+        //std::cout << "tail: " << mesh.tail(arc) << ", head: " << mesh.head(arc) << std::endl;
+        assert(v == mesh.tail(arc));
       }
       if (w > std::numeric_limits<double>::epsilon())
         vLaplace[v] /= w;
