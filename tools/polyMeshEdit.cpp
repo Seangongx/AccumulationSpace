@@ -377,9 +377,12 @@ void setImguiCustomPanel() {
     }
 
     ImGui::SliderFloat("lambda", &imguiParams.pLambda, 0.01, 0.8);
+    ImGui::SameLine();
+    ImGui::Checkbox("Boundary Smoothing", &imguiParams.pBoundarySmoothing);
 
     ImGui::SliderInt("Explicit iters", &imguiParams.pExplicitIterations, 1,
                      1000);
+    ImGui::SameLine();
     if (ImGui::Button("Explicit Minimal Surf")) {
       imguiParams.pExplicitIterations_prev = imguiParams.pExplicitIterations;
       updateSmooth();
@@ -387,15 +390,10 @@ void setImguiCustomPanel() {
     }
 
     ImGui::SliderInt("Implicit iters", &imguiParams.pImplicitIterations, 1, 10);
+    ImGui::SameLine();
     if (ImGui::Button("Implicit Minimal Surf")) {
       imguiParams.pImplicitRunning = !imguiParams.pImplicitRunning;
       imguiParams.pImplicitIterations_prev = imguiParams.pImplicitIterations;
-    }
-
-    if (ImGui::Checkbox("Boundary Smoothing",
-                        &imguiParams.pBoundarySmoothing)) {
-      imguiParams.pBoundarySmoothing = !imguiParams.pBoundarySmoothing;
-      //update_mesh();
     }
 
     if (ImGui::Button("Update Gaussian Curvature")) {

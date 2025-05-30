@@ -78,52 +78,80 @@ class DenoiseSurface {
     RealPoint center = boundary_center();
     double std_ = 0;
     for (auto vBoundary : mesh.heds().boundaryVertices())
-      std_ += pow((vBoundary - center).norm(), 2);
+      std_ += pow((mesh.position(vBoundary) - center).norm(), 2);
 
     return std::sqrt(std_ / mesh.heds().boundaryVertices().size());
   }
 
-  // void boundary_explicit_iterate(float lambda) {
-  //   DGtal::Z3i::RealPoint prev_center = boundary_center();
-  //   double boundary_std_ = boundary_std();
-  //   pmp::Vertex vv;
-  //   for (auto v : mesh.allVertices()) {
-  //     if (!mesh.isVertexBoundary(v))
-  //       continue;
-  //     double w = 0;
-  //     vlaplace_[v] *= 0;
-  //     for (auto h : mesh_.halfedges(v)) {
-  //       vv = mesh_.to_vertex(h);
-  //       if (!mesh_.is_boundary(vv))
-  //         continue;
-  //       w += eweight_[mesh_.edge(h)];
-  //       vlaplace_[v] +=
-  //           eweight_[mesh_.edge(h)] * (mesh_.position(vv) - mesh_.position(v));
-  //     }
-  //     vlaplace_[v] /= w;
-  //   }
+  void boundary_explicit_iterate(float lambda) {
+    // 缓存边界顶点
+    std::vector<PolySurface::Vertex> boundaryVerts;
+    for (auto v : mesh.heds().boundaryVertices())
+      boundaryVerts.push_back(v);
 
-  //   for (auto v : mesh_.vertices())
-  //     if (mesh_.is_boundary(v))
-  //       mesh_.position(v) += lambda * vlaplace_[v];
+    // 记录原始边界中心和标准差
+    RealPoint prev_center(0, 0, 0);
+    for (auto v : boundaryVerts)
+      prev_center += mesh.position(v);
+    prev_center /= boundaryVerts.size();
 
-  //   // restore original surface boundary to avoid shrinking
-  //   double scale = boundary_std_ / boundary_std();
-  //   for (auto v : mesh_.vertices())
-  //     if (mesh_.is_boundary(v))
-  //       mesh_.position(v) *= scale;
+    double prev_std = 0;
+    for (auto v : boundaryVerts)
+      prev_std += pow((mesh.position(v) - prev_center).norm(), 2);
+    prev_std = std::sqrt(prev_std / boundaryVerts.size());
 
-  //   pmp::Point t = prev_center - boundary_center();
-  //   for (auto v : mesh_.vertices())
-  //     if (mesh_.is_boundary(v))
-  //       mesh_.position(v) += t;
-  // }
+    // 计算边界顶点的拉普拉斯向量
+    for (auto v : boundaryVerts) {
+      double w = 0;
+      vLaplace[v] = RealPoint(0, 0, 0);
+      for (auto arc : mesh.outArcs(v)) {
+        auto vv = mesh.head(arc);
+        if (!mesh.isVertexBoundary(vv))
+          continue;
+        w += eWeight[arc];
+        vLaplace[v] += eWeight[arc] * (mesh.position(vv) - mesh.position(v));
+      }
+      if (w > std::numeric_limits<double>::epsilon())
+        vLaplace[v] /= w;
+      else
+        vLaplace[v] = RealPoint(0, 0, 0);
+    }
+
+    // 更新边界顶点位置
+    for (auto v : boundaryVerts)
+      mesh.position(v) += lambda * vLaplace[v];
+
+    // 以原中心为基准缩放
+    // 先计算当前标准差
+    RealPoint curr_center(0, 0, 0);
+    for (auto v : boundaryVerts)
+      curr_center += mesh.position(v);
+    curr_center /= boundaryVerts.size();
+
+    double curr_std = 0;
+    for (auto v : boundaryVerts)
+      curr_std += pow((mesh.position(v) - curr_center).norm(), 2);
+    curr_std = std::sqrt(curr_std / boundaryVerts.size());
+
+    double scale = prev_std / curr_std;
+    for (auto v : boundaryVerts)
+      mesh.position(v) = prev_center + scale * (mesh.position(v) - prev_center);
+
+    // 缩放后重新计算当前中心
+    RealPoint new_center(0, 0, 0);
+    for (auto v : boundaryVerts)
+      new_center += mesh.position(v);
+    new_center /= boundaryVerts.size();
+
+    RealPoint t = prev_center - new_center;
+    for (auto v : boundaryVerts)
+      mesh.position(v) += t;
+  }
 
   void explicitIterate(float lambda, bool boundarySmoothing) {
     if (boundarySmoothing)
-      //boundary_explicit_iterate(surface, lambda);
+      boundary_explicit_iterate(lambda);
 
-      ;
     // Calculate the Laplace operator for each vertex
     for (const auto& v : mesh.allVertices()) {
       if (mesh.isVertexBoundary(v))
@@ -134,8 +162,6 @@ class DenoiseSurface {
         w += eWeight[arc];
         PolySurface::Vertex outv = mesh.head(arc);
         vLaplace[v] += eWeight[arc] * (mesh.position(outv) - mesh.position(v));
-        //std::cout << "arc: " << arc << ", v: " << v << ", outv: " << outv << std::endl;
-        //std::cout << "tail: " << mesh.tail(arc) << ", head: " << mesh.head(arc) << std::endl;
         assert(v == mesh.tail(arc));
       }
       if (w > std::numeric_limits<double>::epsilon())
