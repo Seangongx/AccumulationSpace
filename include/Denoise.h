@@ -1,9 +1,9 @@
 #ifndef DENOISE_H
 #define DENOISE_H
 
-#include <iostream>
 #include <string>
 #include <utility>
+#include "Curvature.h"
 #include "DGtal/helpers/StdDefs.h"
 #include "DGtal/shapes/PolygonalSurface.h"
 
@@ -89,6 +89,9 @@ class DenoiseSurface {
     for (auto v : mesh.heds().boundaryVertices())
       boundaryVerts.push_back(v);
 
+    if (boundaryVerts.empty())
+      return;
+
     // 记录原始边界中心和标准差
     RealPoint prev_center(0, 0, 0);
     for (auto v : boundaryVerts)
@@ -100,7 +103,7 @@ class DenoiseSurface {
       prev_std += pow((mesh.position(v) - prev_center).norm(), 2);
     prev_std = std::sqrt(prev_std / boundaryVerts.size());
 
-    // 计算边界顶点的拉普拉斯向量
+    // 计算拉普拉斯向量
     for (auto v : boundaryVerts) {
       double w = 0;
       vLaplace[v] = RealPoint(0, 0, 0);
@@ -122,7 +125,6 @@ class DenoiseSurface {
       mesh.position(v) += lambda * vLaplace[v];
 
     // 以原中心为基准缩放
-    // 先计算当前标准差
     RealPoint curr_center(0, 0, 0);
     for (auto v : boundaryVerts)
       curr_center += mesh.position(v);
@@ -185,59 +187,8 @@ class DenoiseSurface {
   // property handles
   PolySurface::IndexedPropertyMap<double> eWeight;      // edge weight
   PolySurface::IndexedPropertyMap<RealPoint> vLaplace;  // vertex Laplace
-
-  //EdgeProperty<double> eweight_;
-  //VertexProperty<int> inner_idx_;
-  //VertexProperty<int> boundary_idx_;
-
+  SurfaceCurvature sCurvature;
   //Eigen::SparseMatrix<double> implicit_L;
 };
-
-struct ImguiParams {
-
-  // 滑块/范围参数
-  std::pair<int, int> accFilterRange;
-  std::pair<int, int> defaultAccRange;
-
-  // Denoise参数
-  float pLambda = 0.1f;
-  float minLambda = 0.0f;
-  float maxLambda = 1.0f;
-  int pNoiseMode = 0;
-  int pNoiseScale = 0;
-  int pExplicitIterations = 1;
-  int pExplicitIterations_prev = 1;
-  bool pExplicitRunning = false;
-  int pImplicitIterations = 1;
-  int pImplicitIterations_prev = 1;
-  bool pImplicitRunning = false;
-  bool pBoundarySmoothing = false;
-
-  // 画刷参数
-  float paintRad = 1.0f;
-  float noiseLevel = 1.0f;
-
-  // 按钮状态
-  bool accBtnPressed0 = false;
-  bool accBtnPressed1 = false;
-  bool accBtnPressed2 = false;
-  bool accBtnPressed3 = false;
-  bool accBtnPressed4 = false;
-  bool accBtnPressed5 = false;
-
-  // 其他参数
-  std::string promptText = "select nothing at the beginning\n";
-  // ... 继续添加你需要的参数
-
-  // 可选：参数重置
-  void reset() {
-    // 重置所有参数为默认值
-    *this = ImguiParams();
-  }
-};
-
-//文件列表
-static char* files[]{"Balls.obj", "Bunny_head.obj", "Cat_head.obj",
-                     "David328.obj", "Nefertiti_face.obj"};
 
 #endif  //DENOISE_H

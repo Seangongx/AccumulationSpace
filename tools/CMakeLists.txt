@@ -4,9 +4,10 @@ SET (AS_TOOLS
 )
 
 FOREACH(FILE ${AS_TOOLS})
-  add_executable(${FILE} ${FILE}.cpp ${AS_TOOLS_SRC})
+  add_executable(${FILE} ${FILE}.cpp)
   target_include_directories(${FILE}
   PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src
     ${DGTAL_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/deps/polyscope/deps/glm
@@ -25,10 +26,11 @@ ENDFOREACH(FILE)
 #   meshViewer
 # )
 # FOREACH(FILE ${AS_COMMANDS})
-#   add_executable(${FILE} ${FILE}.cpp ${AS_COMMAND_SRC})
+#   add_executable(${FILE} ${FILE}.cpp)
 #   target_link_libraries(${FILE} ${DGTAL_LIBRARIES})
 #   target_include_directories(${FILE}
 #   PUBLIC
+#     ${PROJECT_SOURCE_DIR}/include
 #     ${PROJECT_SOURCE_DIR}/src
 #     ${DGTAL_INCLUDE_DIRS}
 #   )

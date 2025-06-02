@@ -57,6 +57,8 @@
 #include "AccumulationSpace.h"
 #include "AccumulationSpace.ipp"
 #include "CLI11.hpp"
+#include "Common.h"
+#include "Curvature.h"
 #include "Denoise.h"
 #include "Timer.h"
 ///////////////////////////////////////////////////////////////////////////////

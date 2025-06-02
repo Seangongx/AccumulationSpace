@@ -23,25 +23,14 @@ SET(WITH_GMP OFF)
 include(dgtal)
 include(polyscope)
 
-SET(AS_COMMAND_SRC
-    ${PROJECT_SOURCE_DIR}/src/NormalAccumulator.cpp
-)
-SET(AS_TOOLS_SRC 
-    ${PROJECT_SOURCE_DIR}/src/AccumulationAlgorithms.h
-    ${PROJECT_SOURCE_DIR}/src/AccumulationAlgorithms.ipp
-    ${PROJECT_SOURCE_DIR}/src/AccumulationSpace.h
-    ${PROJECT_SOURCE_DIR}/src/AccumulationSpace.ipp
-    ${PROJECT_SOURCE_DIR}/src/PolyscopeEnvironment.h
-    ${PROJECT_SOURCE_DIR}/src/PolyscopeEnvironment.ipp
-)
-
 # Create an executable
 add_subdirectory(tools)
-add_executable(segmentFromAcc ${AS_SOURCE_FILE} main.cpp)
+add_executable(segmentFromAcc main.cpp)
 
 # Include settings
 target_include_directories(segmentFromAcc
 PRIVATE
+    ${PROJECT_SOURCE_DIR}/include
     ${PROJECT_SOURCE_DIR}/src
     ${DGTAL_INCLUDE_DIRS}
 )
